@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Plataforma Operativa - CEVA Logistics</title>
+<title>Control de Operaciones - CEVA Logistics</title>
 <style>
   :root {
     --azul: #00204e;        
@@ -20,26 +20,54 @@
   /* ================= PANTALLA DE LOGIN ================= */
   #vista-login {
     display: flex; align-items: center; justify-content: center;
-    min-height: 100vh; background: var(--azul); padding: 20px;
+    min-height: 100vh; background: var(--fondo); padding: 20px;
   }
   .tarjeta-login {
-    background: #fff; padding: 40px; border-radius: 16px;
-    width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    background: #fff; padding: 48px 40px; border-radius: 20px;
+    width: 100%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,30,80,0.12);
+    text-align: center;
   }
-  .tarjeta-login h2 { color: var(--azul); font-size: 26px; font-weight: 800; margin-bottom: 6px; }
-  .tarjeta-login p { color: var(--gris); font-size: 14px; margin-bottom: 24px; }
-  .tarjeta-login label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--texto); }
+  .tarjeta-login h2 {
+    color: var(--azul); font-size: 30px; font-weight: 800;
+    line-height: 1.15; margin-bottom: 8px; letter-spacing: -0.5px;
+  }
+  .tarjeta-login .sub-login {
+    color: var(--gris); font-size: 14px; font-weight: 600;
+    margin-bottom: 32px; letter-spacing: 0.5px;
+  }
+  .tarjeta-login form { text-align: left; }
+  .tarjeta-login label {
+    display: block; font-weight: 600; font-size: 13px;
+    margin-bottom: 6px; color: var(--texto);
+  }
   .tarjeta-login input {
-    width: 100%; padding: 12px; border: 1px solid #c3cbd9; border-radius: 8px;
-    font-size: 14px; margin-bottom: 16px; outline: none;
+    width: 100%; padding: 12px 14px; border: 1px solid #c3cbd9; border-radius: 8px;
+    font-size: 14px; margin-bottom: 20px; outline: none; background: #fafbfc;
   }
-  .tarjeta-login input:focus { border-color: var(--azul-medio); }
-  .error-login { color: var(--rojo); font-size: 13px; margin-bottom: 12px; display: none; }
+  .tarjeta-login input:focus { border-color: var(--azul-medio); background: #fff; }
+  
+  /* Contenedor contraseña con botón ver */
+  .grupo-password { position: relative; }
+  .grupo-password input { padding-right: 45px; }
+  .btn-ver {
+    position: absolute; right: 12px; top: 38px; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; font-size: 16px; color: var(--gris);
+  }
 
-  /* ================= PLATOMA PRINCIPAL (Oculta hasta loguearse) ================= */
+  .error-login {
+    color: var(--rojo); font-size: 13px; margin-bottom: 16px;
+    display: none; background: #fde8ec; padding: 8px; border-radius: 6px; text-align: center;
+  }
+  .btn-ingresar {
+    width: 100%; padding: 14px; font-size: 15px; font-weight: 700;
+    background: var(--rojo); color: #fff; border: none; border-radius: 8px;
+    cursor: pointer; transition: background 0.2s; margin-top: 10px;
+  }
+  .btn-ingresar:hover { background: #c50024; }
+
+  /* ================= PLATAFORMA PRINCIPAL ================= */
   #contenedor-principal { display: none; min-height: 100vh; }
 
-  /* Copia de tus estilos de barra lateral y contenido */
   .sidebar {
     width: 270px; background: var(--azul); color: #fff;
     position: fixed; top: 0; bottom: 0; left: 0;
@@ -50,7 +78,7 @@
   .logo .texto-logo { font-size: 38px; font-weight: 900; letter-spacing: 1px; line-height: 1; }
   .logo .texto-logo span { color: var(--rojo); }
   .logo .sub-logo { font-size: 11px; letter-spacing: 4px; margin-top: 4px; opacity: .85; }
-  .logo h1 { font-size: 24px; font-weight: 800; margin-top: 22px; line-height: 1.1; }
+  .logo h1 { font-size: 20px; font-weight: 800; margin-top: 22px; line-height: 1.1; }
   .logo .planta { font-size: 13px; margin-top: 8px; opacity: .8; }
 
   .usuario { border-top: 1px solid rgba(255,255,255,.2); border-bottom: 1px solid rgba(255,255,255,.2); padding: 16px 22px; }
@@ -72,7 +100,7 @@
   .menu a.sub { margin-left: 18px; padding: 9px 14px; font-size: 14px; border-left: 2px solid rgba(255,255,255,.25); border-radius: 0 10px 10px 0; }
 
   .demo-rol { padding: 14px 18px 20px; border-top: 1px solid rgba(255,255,255,.2); font-size: 12px; }
-  .demo-rol button { width: 100%; margin-top: 8px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; }
+  .demo-rol button { width: 100%; margin-top: 8px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 8px; border-radius: 6px; cursor: pointer; }
   .demo-rol button:hover { background: var(--rojo); border-color: var(--rojo); }
 
   .contenido { margin-left: 270px; padding: 20px; width: calc(100% - 270px); }
@@ -157,15 +185,20 @@
 <!-- ================= PANTALLA DE LOGIN ================= -->
 <div id="vista-login">
   <div class="tarjeta-login">
-    <h2>CEVA Logistics</h2>
-    <p>Ingresa tus credenciales para acceder a la plataforma.</p>
+    <h2>CONTROL DE<br>OPERACIONES</h2>
+    <div class="sub-login">LATAM 400</div>
     <div class="error-login" id="error-login">Usuario o contraseña incorrectos.</div>
     <form id="form-login">
       <label>Usuario</label>
-      <input type="text" id="login-usuario" placeholder="Ej: RVALVERDE" required autocomplete="username">
-      <label>Contraseña</label>
-      <input type="password" id="login-password" placeholder="••••••" required autocomplete="current-password">
-      <button type="submit" class="btn" style="width: 100%; padding: 12px; font-size: 15px;">Ingresar</button>
+      <input type="text" id="login-usuario" placeholder="Ingrese usuario" required autocomplete="username">
+      
+      <div class="grupo-password">
+        <label>Contraseña</label>
+        <input type="password" id="login-password" placeholder="Ingrese contraseña" required autocomplete="current-password">
+        <button type="button" class="btn-ver" id="btn-toggle-password" title="Mostrar/Ocultar contraseña">👁️</button>
+      </div>
+
+      <button type="submit" class="btn-ingresar">INGRESAR</button>
     </form>
   </div>
 </div>
@@ -180,8 +213,8 @@
         <div class="texto-logo">CEV<span>A</span></div>
         <div class="sub-logo">LOGISTICS</div>
       </div>
-      <h1>PLATAFORMA OPERATIVA</h1>
-      <div class="planta">LATAM 400 CL</div>
+      <h1>CONTROL DE OPERACIONES</h1>
+      <div class="planta">LATAM 400</div>
     </div>
 
     <div class="usuario">
@@ -194,7 +227,7 @@
 
     <div class="demo-rol">
       <label>Sesión activa</label>
-      <button class="btn" id="btn-cerrar-sesion">Cerrar Sesión</button>
+      <button id="btn-cerrar-sesion">Cerrar Sesión</button>
     </div>
   </aside>
 
@@ -227,9 +260,6 @@
 <script>
 /* ==========================================================================
    LISTA DE USUARIOS AUTORIZADOS
-   Aquí puedes agregar más usuarios o cambiar las credenciales.
-   - rol: "admin" (tiene acceso al panel de administración)
-   - rol: "usuario" (solo ve los reportes)
    ========================================================================== */
 const USUARIOS_PERMITIDOS = [
   { usuario: "RVALVERDE", password: "123", nombre: "Ruth Valverde", cargo: "Practicante de Inventario", rol: "admin" },
@@ -296,11 +326,23 @@ function toast(msg) {
   clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3000);
 }
 
+/* ---------- Botón para ver/ocultar contraseña ---------- */
+$("#btn-toggle-password").addEventListener("click", () => {
+  const inputPass = $("#login-password");
+  if (inputPass.type === "password") {
+    inputPass.type = "text";
+    $("#btn-toggle-password").textContent = "🔒";
+  } else {
+    inputPass.type = "password";
+    $("#btn-toggle-password").textContent = "👁️";
+  }
+});
+
 /* ---------- Lógica de Login ---------- */
 $("#form-login").addEventListener("submit", e => {
   e.preventDefault();
   const uInput = $("#login-usuario").value.trim().toUpperCase();
-  const pInput = $("#login-password").value;
+  const pInput = $("#login-password").value.trim();
 
   const encontrado = USUARIOS_PERMITIDOS.find(u => u.usuario === uInput && u.password === pInput);
   
@@ -455,4 +497,98 @@ function vistaAdmin(main) {
   let h = '<div class="tarjeta encabezado"><h2>Panel de administración</h2>' +
           "<p>Aquí conectas los Power BI y ordenas los dashboards de cada módulo.</p></div>";
 
-  h +=
+  h += '<div class="aviso">💡 Los cambios que haces aquí se guardan <strong>solo en este navegador</strong>.</div>';
+
+  h += '<div class="barra-admin">' +
+       '<button class="btn" data-acc="exportar">📋 Copiar configuración</button>' +
+       '<button class="btn gris" data-acc="reset">↺ Restablecer</button></div>';
+
+  CONFIG.forEach(m => {
+    h += '<div class="tarjeta bloque-admin"><h3><span>' + esc(m.icono) + " " + esc(m.nombre) + "</span>" +
+         '<button class="btn" data-acc="nuevo" data-m="' + esc(m.id) + '">+ Agregar dashboard</button></h3>' +
+         "<table><tr><th>Dashboard</th><th>Estado</th><th></th></tr>";
+    m.dashboards.forEach(d => {
+      h += "<tr><td>" + esc(d.nombre) + "</td><td>" +
+           (d.url ? '<span class="estado ok">Conectado</span>' : '<span class="estado pend">Pendiente</span>') + "</td>" +
+           '<td class="acc"><a class="btn gris" style="text-decoration:none;display:inline-block" href="#reportes/' + esc(m.id) + "/" + esc(d.id) + '">Ver</a>' +
+           '<button class="btn" data-acc="editar" data-m="' + esc(m.id) + '" data-d="' + esc(d.id) + '">Editar</button>' +
+           '<button class="btn peligro" data-acc="borrar" data-m="' + esc(m.id) + '" data-d="' + esc(d.id) + '">Quitar</button></td></tr>';
+    });
+    if (!m.dashboards.length) h += '<tr><td colspan="3" style="color:#6b7585">Sin dashboards todavía.</td></tr>';
+    h += "</table></div>";
+  });
+  main.innerHTML = h;
+}
+
+function abrirModal(modId, dashId) {
+  const m = buscarModulo(modId); if (!m) return;
+  const d = dashId ? m.dashboards.find(x => x.id === dashId) : null;
+  edicion = { m: modId, d: dashId || "" };
+  $("#modal-titulo").textContent = d ? "Configurar: " + d.nombre : "Nuevo dashboard en " + m.nombre;
+  $("#input-nombre").value = d ? d.nombre : "";
+  $("#input-url").value = d ? d.url : "";
+  $("#modal").classList.add("abierto");
+  $("#input-nombre").focus();
+}
+function cerrarModal() { $("#modal").classList.remove("abierto"); edicion = null; }
+
+function limpiarUrl(texto) {
+  let u = texto.trim();
+  const m = u.match(/src=["']([^"']+)["']/i);
+  if (m) u = m[1];
+  return u;
+}
+
+function guardarModal() {
+  if (!edicion) return;
+  const m = buscarModulo(edicion.m);
+  const nombre = $("#input-nombre").value.trim();
+  const url = limpiarUrl($("#input-url").value);
+  if (!nombre) { alert("Escribe un nombre para el dashboard."); return; }
+  if (url && !/^https:\/\//i.test(url)) { alert("El enlace debe empezar con https://"); return; }
+
+  if (edicion.d) {
+    const d = m.dashboards.find(x => x.id === edicion.d);
+    d.nombre = nombre; d.url = url;
+  } else {
+    m.dashboards.push({ id: "d" + Date.now(), nombre: nombre, url: url });
+  }
+  guardarConfig(); cerrarModal(); render(); toast("Guardado ✔");
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-acc]"); if (!b) return;
+  const a = b.dataset.acc, m = b.dataset.m, d = b.dataset.d;
+  if (a === "editar") abrirModal(m, d);
+  else if (a === "nuevo") abrirModal(m, "");
+  else if (a === "cerrar-modal") cerrarModal();
+  else if (a === "guardar-modal") guardarModal();
+  else if (a === "borrar") {
+    if (confirm("¿Quitar este dashboard de la lista?")) {
+      const mod = buscarModulo(m); mod.dashboards = mod.dashboards.filter(x => x.id !== d);
+      guardarConfig(); render(); toast("Dashboard quitado");
+    }
+  }
+  else if (a === "pantalla") {
+    const f = $("#marco");
+    if (f && f.requestFullscreen) f.requestFullscreen(); else alert("Primero conecta un dashboard.");
+  }
+  else if (a === "exportar") {
+    const texto = "const BASE = " + JSON.stringify(CONFIG, null, 2) + ";";
+    if (navigator.clipboard) navigator.clipboard.writeText(texto).then(() => toast("Configuración copiada ✔"), () => prompt("Copia este texto:", texto));
+    else prompt("Copia este texto:", texto);
+  }
+  else if (a === "reset") {
+    if (confirm("Se borrarán los cambios hechos aquí. ¿Seguro?")) {
+      try { localStorage.removeItem("ceva_config"); } catch (err) {}
+      CONFIG = JSON.parse(JSON.stringify(BASE)); render(); toast("Restablecido");
+    }
+  }
+});
+
+window.addEventListener("hashchange", render);
+
+verificarEstadoSesion();
+</script>
+</body>
+</html>
