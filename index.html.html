@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plataforma Operativa - CEVA Logistics</title>
+<style>
+  :root {
+    --azul: #00204e;        
+    --azul-medio: #0a3a82;  
+    --azul-claro: #e6edf8;  
+    --rojo: #e4002b;        
+    --fondo: #eef1f6;
+    --texto: #1b2433;
+    --gris: #6b7585;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", Arial, sans-serif; }
+  body { background: var(--fondo); min-height: 100vh; color: var(--texto); }
+
+  /* ================= PANTALLA DE LOGIN ================= */
+  #vista-login {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; background: var(--azul); padding: 20px;
+  }
+  .tarjeta-login {
+    background: #fff; padding: 40px; border-radius: 16px;
+    width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  .tarjeta-login h2 { color: var(--azul); font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+  .tarjeta-login p { color: var(--gris); font-size: 14px; margin-bottom: 24px; }
+  .tarjeta-login label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--texto); }
+  .tarjeta-login input {
+    width: 100%; padding: 12px; border: 1px solid #c3cbd9; border-radius: 8px;
+    font-size: 14px; margin-bottom: 16px; outline: none;
+  }
+  .tarjeta-login input:focus { border-color: var(--azul-medio); }
+  .error-login { color: var(--rojo); font-size: 13px; margin-bottom: 12px; display: none; }
+
+  /* ================= PLATOMA PRINCIPAL (Oculta hasta loguearse) ================= */
+  #contenedor-principal { display: none; min-height: 100vh; }
+
+  /* Copia de tus estilos de barra lateral y contenido */
+  .sidebar {
+    width: 270px; background: var(--azul); color: #fff;
+    position: fixed; top: 0; bottom: 0; left: 0;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .logo { padding: 26px 22px 18px; }
+  .logo img { max-width: 150px; display: block; margin-bottom: 14px; }
+  .logo .texto-logo { font-size: 38px; font-weight: 900; letter-spacing: 1px; line-height: 1; }
+  .logo .texto-logo span { color: var(--rojo); }
+  .logo .sub-logo { font-size: 11px; letter-spacing: 4px; margin-top: 4px; opacity: .85; }
+  .logo h1 { font-size: 24px; font-weight: 800; margin-top: 22px; line-height: 1.1; }
+  .logo .planta { font-size: 13px; margin-top: 8px; opacity: .8; }
+
+  .usuario { border-top: 1px solid rgba(255,255,255,.2); border-bottom: 1px solid rgba(255,255,255,.2); padding: 16px 22px; }
+  .usuario strong { display: block; font-size: 15px; }
+  .usuario span { font-size: 12px; opacity: .85; }
+  .etiqueta-rol {
+    display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px;
+    background: rgba(255,255,255,.18); font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  }
+
+  .menu { padding: 14px 12px; flex: 1; }
+  .menu .titulo-seccion { font-size: 11px; letter-spacing: 2px; opacity: .6; padding: 14px 12px 6px; }
+  .menu a {
+    display: block; color: #fff; text-decoration: none;
+    padding: 11px 14px; border-radius: 10px; margin-bottom: 3px; font-size: 15px;
+  }
+  .menu a:hover { background: rgba(255,255,255,.12); }
+  .menu a.activo { background: rgba(255,255,255,.22); font-weight: 600; }
+  .menu a.sub { margin-left: 18px; padding: 9px 14px; font-size: 14px; border-left: 2px solid rgba(255,255,255,.25); border-radius: 0 10px 10px 0; }
+
+  .demo-rol { padding: 14px 18px 20px; border-top: 1px solid rgba(255,255,255,.2); font-size: 12px; }
+  .demo-rol button { width: 100%; margin-top: 8px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; }
+  .demo-rol button:hover { background: var(--rojo); border-color: var(--rojo); }
+
+  .contenido { margin-left: 270px; padding: 20px; width: calc(100% - 270px); }
+  .tarjeta { background: #fff; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,30,80,.08); }
+
+  .encabezado { padding: 22px 28px; margin-bottom: 18px; }
+  .encabezado h2 { font-size: 30px; font-weight: 800; color: var(--azul); }
+  .encabezado p { color: var(--gris); font-size: 14px; margin-top: 4px; }
+  .migas { font-size: 13px; color: var(--gris); margin-bottom: 8px; }
+  .migas a { color: var(--azul-medio); text-decoration: none; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+  .modulo { padding: 26px; text-decoration: none; color: inherit; display: block; transition: transform .15s, box-shadow .15s; border-top: 5px solid var(--azul-medio); }
+  .modulo:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,30,80,.15); }
+  .modulo .icono { font-size: 34px; margin-bottom: 10px; }
+  .modulo h3 { color: var(--azul); font-size: 21px; font-weight: 800; margin-bottom: 8px; }
+  .modulo p { color: var(--gris); font-size: 14px; margin-bottom: 14px; min-height: 40px; }
+  .modulo .meta { font-size: 12px; color: var(--azul-medio); font-weight: 600; margin-bottom: 14px; }
+  .modulo .abrir { color: var(--azul-medio); font-weight: 700; font-size: 14px; }
+
+  .pestanas { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .pestana {
+    padding: 10px 22px; border-radius: 999px; border: 2px solid var(--azul-medio);
+    background: #fff; color: var(--azul-medio); font-weight: 700; font-size: 14px;
+    cursor: pointer; text-decoration: none;
+  }
+  .pestana.activa { background: var(--azul-medio); color: #fff; }
+
+  .visor { padding: 16px; }
+  .visor-barra { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  .visor-barra h3 { font-size: 18px; color: var(--azul); }
+  .marco, .vacio { width: 100%; height: calc(100vh - 330px); min-height: 460px; border-radius: 10px; }
+  .marco { border: 0; background: #f6f7f9; }
+  .vacio {
+    border: 2px dashed #c3cbd9; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; color: var(--gris); padding: 30px;
+  }
+  .vacio .icono { font-size: 54px; margin-bottom: 10px; }
+  .vacio h4 { font-size: 20px; color: var(--azul); margin-bottom: 8px; }
+
+  .btn { border: none; background: var(--azul-medio); color: #fff; padding: 9px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .btn:hover { background: var(--azul); }
+  .btn.gris { background: #e3e7ee; color: #333; }
+  .btn.gris:hover { background: #d3d9e3; }
+  .btn.peligro { background: #fde8ec; color: #b4001f; }
+  .btn.grande { padding: 12px 24px; font-size: 15px; margin-top: 16px; }
+
+  .barra-admin { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .bloque-admin { padding: 20px 24px; margin-bottom: 16px; }
+  .bloque-admin h3 { color: var(--azul); font-size: 18px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--gris); font-size: 12px; padding: 8px; border-bottom: 1px solid #e3e7ee; }
+  td { padding: 10px 8px; border-bottom: 1px solid #f0f2f6; }
+  td.acc { text-align: right; white-space: nowrap; }
+  td.acc .btn { margin-left: 6px; padding: 6px 12px; }
+  .estado { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .estado.ok { background: #e1f5e8; color: #14803c; }
+  .estado.pend { background: #fff3d6; color: #8a6100; }
+
+  .fondo-modal { display: none; position: fixed; inset: 0; background: rgba(0,20,50,.55); align-items: center; justify-content: center; z-index: 20; padding: 20px; }
+  .fondo-modal.abierto { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 28px; width: 100%; max-width: 620px; }
+  .modal h3 { color: var(--azul); margin-bottom: 14px; font-size: 20px; }
+  .modal label { font-weight: 600; font-size: 14px; display: block; margin: 12px 0 6px; }
+  .modal input { width: 100%; padding: 12px; border: 1px solid #c3cbd9; border-radius: 8px; font-size: 14px; }
+  .modal .botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .ayuda { background: var(--azul-claro); border-radius: 8px; padding: 12px; font-size: 13px; color: var(--azul); margin-top: 14px; line-height: 1.5; }
+
+  .aviso { background: #fff8e1; color: #6b5200; border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--azul); color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 14px; display: none; z-index: 30; }
+
+  @media (max-width: 900px) {
+    body { display: block; }
+    #contenedor-principal { flex-direction: column; }
+    .sidebar { position: static; width: 100%; }
+    .contenido { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= PANTALLA DE LOGIN ================= -->
+<div id="vista-login">
+  <div class="tarjeta-login">
+    <h2>CEVA Logistics</h2>
+    <p>Ingresa tus credenciales para acceder a la plataforma.</p>
+    <div class="error-login" id="error-login">Usuario o contraseña incorrectos.</div>
+    <form id="form-login">
+      <label>Usuario</label>
+      <input type="text" id="login-usuario" placeholder="Ej: RVALVERDE" required autocomplete="username">
+      <label>Contraseña</label>
+      <input type="password" id="login-password" placeholder="••••••" required autocomplete="current-password">
+      <button type="submit" class="btn" style="width: 100%; padding: 12px; font-size: 15px;">Ingresar</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= CONTENEDOR PRINCIPAL DE LA PLATAFORMA ================= -->
+<div id="contenedor-principal">
+  <!-- BARRA LATERAL -->
+  <aside class="sidebar">
+    <div class="logo">
+      <img src="logo.png" alt="CEVA Logistics" onerror="this.style.display='none'; document.getElementById('logo-texto').style.display='block';">
+      <div id="logo-texto" style="display:none">
+        <div class="texto-logo">CEV<span>A</span></div>
+        <div class="sub-logo">LOGISTICS</div>
+      </div>
+      <h1>PLATAFORMA OPERATIVA</h1>
+      <div class="planta">LATAM 400 CL</div>
+    </div>
+
+    <div class="usuario">
+      <strong id="nombre-usuario-display">Ruth Valverde</strong>
+      <span id="cargo-usuario-display">Practicante de Inventario</span><br>
+      <span class="etiqueta-rol" id="etiqueta-rol"></span>
+    </div>
+
+    <nav class="menu" id="menu"></nav>
+
+    <div class="demo-rol">
+      <label>Sesión activa</label>
+      <button class="btn" id="btn-cerrar-sesion">Cerrar Sesión</button>
+    </div>
+  </aside>
+
+  <!-- CONTENIDO -->
+  <main class="contenido" id="principal"></main>
+</div>
+
+<!-- VENTANA EMERGENTE -->
+<div class="fondo-modal" id="modal">
+  <div class="modal">
+    <h3 id="modal-titulo"></h3>
+    <label>Nombre del dashboard</label>
+    <input type="text" id="input-nombre" placeholder="Ej: Paletas">
+    <label>Enlace de Power BI</label>
+    <input type="text" id="input-url" placeholder="https://app.powerbi.com/reportEmbed?reportId=...">
+    <div class="ayuda">
+      <strong>¿Dónde saco el enlace?</strong><br>
+      En Power BI: abre el reporte → <em>Archivo</em> → <em>Insertar informe</em> → <em>Sitio web o portal</em>.
+      Copia el enlace. Quien lo vea tendrá que iniciar sesión con su cuenta de la empresa.
+    </div>
+    <div class="botones">
+      <button class="btn gris" data-acc="cerrar-modal">Cancelar</button>
+      <button class="btn" data-acc="guardar-modal">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ==========================================================================
+   LISTA DE USUARIOS AUTORIZADOS
+   Aquí puedes agregar más usuarios o cambiar las credenciales.
+   - rol: "admin" (tiene acceso al panel de administración)
+   - rol: "usuario" (solo ve los reportes)
+   ========================================================================== */
+const USUARIOS_PERMITIDOS = [
+  { usuario: "RVALVERDE", password: "123", nombre: "Ruth Valverde", cargo: "Practicante de Inventario", rol: "admin" },
+  { usuario: "OPERACIONES1", password: "123", nombre: "Operador de Turno", cargo: "Personal de Campo", rol: "usuario" }
+];
+
+const BASE = [
+  { id: "inventario", nombre: "Inventario", icono: "📦",
+    desc: "Paletas, virtuales, inmovilizados y más.",
+    dashboards: [
+      { id: "paletas",       nombre: "Paletas",       url: "" },
+      { id: "virtuales",     nombre: "Virtuales",     url: "" },
+      { id: "inmovilizados", nombre: "Inmovilizados", url: "" }
+    ] },
+  { id: "operacion", nombre: "Operación", icono: "🚚",
+    desc: "Indicadores de la operación diaria.",
+    dashboards: [
+      { id: "despachos",     nombre: "Despachos",     url: "" },
+      { id: "recepcion",     nombre: "Recepción",     url: "" },
+      { id: "productividad", nombre: "Productividad", url: "" }
+    ] },
+  { id: "rh", nombre: "RH", icono: "👥",
+    desc: "Indicadores de recursos humanos.",
+    dashboards: [ { id: "rh", nombre: "RH", url: "" } ] },
+  { id: "seguridad", nombre: "Seguridad", icono: "🦺",
+    desc: "Indicadores de seguridad y salud.",
+    dashboards: [ { id: "seguridad", nombre: "Seguridad", url: "" } ] },
+  { id: "facturacion", nombre: "Facturación", icono: "🧾",
+    desc: "Reporte de facturación.",
+    dashboards: [ { id: "facturacion", nombre: "Facturación", url: "" } ] }
+];
+
+const SECCIONES = [
+  { id: "reportes", nombre: "Reportes", icono: "📊", desc: "Dashboards de Power BI organizados por módulo.", ruta: "#reportes" }
+];
+
+let CONFIG = cargarConfig();
+let usuarioActual = cargarSesionActiva();
+let edicion = null;
+
+function cargarConfig() {
+  try {
+    const s = JSON.parse(localStorage.getItem("ceva_config"));
+    if (Array.isArray(s) && s.length) return s;
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(BASE));
+}
+function guardarConfig() { try { localStorage.setItem("ceva_config", JSON.stringify(CONFIG)); } catch (e) {} }
+
+function cargarSesionActiva() {
+  try {
+    const u = JSON.parse(localStorage.getItem("ceva_sesion_activa"));
+    return u || null;
+  } catch(e) { return null; }
+}
+
+const $ = s => document.querySelector(s);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const esAdmin = () => usuarioActual && usuarioActual.rol === "admin";
+const buscarModulo = id => CONFIG.find(m => m.id === id);
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3000);
+}
+
+/* ---------- Lógica de Login ---------- */
+$("#form-login").addEventListener("submit", e => {
+  e.preventDefault();
+  const uInput = $("#login-usuario").value.trim().toUpperCase();
+  const pInput = $("#login-password").value;
+
+  const encontrado = USUARIOS_PERMITIDOS.find(u => u.usuario === uInput && u.password === pInput);
+  
+  if (encontrado) {
+    usuarioActual = encontrado;
+    localStorage.setItem("ceva_sesion_activa", JSON.stringify(encontrado));
+    $("#error-login").style.display = "none";
+    $("#form-login").reset();
+    verificarEstadoSesion();
+  } else {
+    $("#error-login").style.display = "block";
+  }
+});
+
+$("#btn-cerrar-sesion").addEventListener("click", () => {
+  localStorage.removeItem("ceva_sesion_activa");
+  usuarioActual = null;
+  verificarEstadoSesion();
+});
+
+function verificarEstadoSesion() {
+  if (usuarioActual) {
+    $("#vista-login").style.display = "none";
+    $("#contenedor-principal").style.display = "flex";
+    $("#nombre-usuario-display").textContent = usuarioActual.nombre;
+    $("#cargo-usuario-display").textContent = usuarioActual.cargo;
+    render();
+  } else {
+    $("#vista-login").style.display = "flex";
+    $("#contenedor-principal").style.display = "none";
+  }
+}
+
+/* ---------- Rutas y Vistas de la App ---------- */
+function ruta() { return (location.hash.replace("#", "") || "inicio").split("/"); }
+
+function render() {
+  if (!usuarioActual) return;
+  const p = ruta();
+  $("#etiqueta-rol").textContent = esAdmin() ? "ADMINISTRADORA" : "USUARIO";
+  dibujarMenu(p);
+  const main = $("#principal");
+  if (p[0] === "admin" && esAdmin()) vistaAdmin(main);
+  else if (p[0] === "reportes") { if (p[1]) vistaModulo(main, p[1], p[2]); else vistaReportes(main); }
+  else vistaInicio(main);
+  window.scrollTo(0, 0);
+}
+
+function dibujarMenu(p) {
+  let h = '<a href="#inicio" class="' + (p[0] === "inicio" || !p[0] ? "activo" : "") + '">🏠 Inicio</a>';
+  SECCIONES.forEach(s => {
+    const dentro = p[0] === s.id;
+    h += '<a href="' + s.ruta + '" class="' + (dentro && !p[1] ? "activo" : "") + '">' + esc(s.icono) + " " + esc(s.nombre) + "</a>";
+    if (dentro && s.id === "reportes") {
+      CONFIG.forEach(m => {
+        h += '<a class="sub ' + (p[1] === m.id ? "activo" : "") + '" href="#reportes/' + esc(m.id) + '">' + esc(m.icono) + " " + esc(m.nombre) + "</a>";
+      });
+    }
+  });
+  if (esAdmin()) {
+    h += '<div class="titulo-seccion">ADMINISTRACIÓN</div>';
+    h += '<a href="#admin" class="' + (p[0] === "admin" ? "activo" : "") + '">⚙️ Panel de administración</a>';
+  }
+  $("#menu").innerHTML = h;
+}
+
+function vistaInicio(main) {
+  let h = '<div class="tarjeta encabezado"><h2>Panel Principal</h2>' +
+          '<p>Elige una sección para continuar.</p></div><div class="grid">';
+  SECCIONES.forEach(s => {
+    const meta = s.id === "reportes" ? CONFIG.length + " módulos" : "";
+    h += '<a class="tarjeta modulo" href="' + s.ruta + '">' +
+           '<div class="icono">' + esc(s.icono) + '</div>' +
+           '<h3>' + esc(s.nombre.toUpperCase()) + '</h3>' +
+           '<p>' + esc(s.desc) + '</p>' +
+           '<div class="meta">' + meta + '</div>' +
+           '<span class="abrir">Abrir →</span>' +
+         '</a>';
+  });
+  h += "</div>";
+  main.innerHTML = h;
+}
+
+function vistaReportes(main) {
+  let h = '<div class="tarjeta encabezado">' +
+          '<div class="migas"><a href="#inicio">Inicio</a> / Reportes</div>' +
+          '<h2>Reportes</h2>' +
+          '<p>Elige un módulo para ver sus dashboards.</p></div>';
+  h += '<div class="grid">';
+  CONFIG.forEach(m => {
+    const total = m.dashboards.length;
+    const conectados = m.dashboards.filter(d => d.url).length;
+    const meta = total + (total === 1 ? " dashboard" : " dashboards") +
+                 (esAdmin() ? " · " + conectados + " conectado" + (conectados === 1 ? "" : "s") : "");
+    h += '<a class="tarjeta modulo" href="#reportes/' + esc(m.id) + '">' +
+           '<div class="icono">' + esc(m.icono) + '</div>' +
+           '<h3>' + esc(m.nombre.toUpperCase()) + '</h3>' +
+           '<p>' + esc(m.desc || "") + '</p>' +
+           '<div class="meta">' + meta + '</div>' +
+           '<span class="abrir">Abrir módulo →</span>' +
+         '</a>';
+  });
+  h += "</div>";
+  main.innerHTML = h;
+}
+
+function vistaModulo(main, modId, dashId) {
+  const m = buscarModulo(modId);
+  if (!m) { location.hash = "#reportes"; return; }
+  const d = m.dashboards.find(x => x.id === dashId) || m.dashboards[0];
+
+  let h = '<div class="tarjeta encabezado">' +
+            '<div class="migas"><a href="#inicio">Inicio</a> / <a href="#reportes">Reportes</a> / ' + esc(m.nombre) + (d ? " / " + esc(d.nombre) : "") + "</div>" +
+            "<h2>" + esc(m.icono) + " " + esc(m.nombre.toUpperCase()) + "</h2>" +
+            "<p>" + esc(m.desc || "") + "</p></div>";
+
+  if (!d) {
+    h += '<div class="tarjeta visor"><div class="vacio"><div class="icono">📭</div><h4>Este módulo aún no tiene dashboards</h4>' +
+         (esAdmin() ? '<button class="btn grande" data-acc="nuevo" data-m="' + esc(m.id) + '">+ Agregar dashboard</button>' : "<p>Pronto estará disponible.</p>") +
+         "</div></div>";
+    main.innerHTML = h; return;
+  }
+
+  if (m.dashboards.length > 1) {
+    h += '<div class="pestanas">';
+    m.dashboards.forEach(x => {
+      h += '<a class="pestana ' + (x.id === d.id ? "activa" : "") + '" href="#reportes/' + esc(m.id) + "/" + esc(x.id) + '">' + esc(x.nombre) + "</a>";
+    });
+    h += "</div>";
+  }
+
+  h += '<div class="tarjeta visor"><div class="visor-barra"><h3>' + esc(d.nombre) + "</h3><div>" +
+       '<button class="btn gris" data-acc="pantalla">⛶ Pantalla completa</button> ' +
+       (esAdmin() ? '<button class="btn" data-acc="editar" data-m="' + esc(m.id) + '" data-d="' + esc(d.id) + '">⚙ Configurar enlace</button>' : "") +
+       "</div></div>";
+
+  if (d.url) {
+    h += '<iframe class="marco" id="marco" src="' + esc(d.url) + '" allowfullscreen title="' + esc(d.nombre) + '"></iframe>';
+  } else if (esAdmin()) {
+    h += '<div class="vacio"><div class="icono">📊</div><h4>Aún no hay un Power BI conectado</h4>' +
+         "<p>Pega el enlace del reporte para verlo aquí.</p>" +
+         '<button class="btn grande" data-acc="editar" data-m="' + esc(m.id) + '" data-d="' + esc(d.id) + '">Conectar Power BI</button></div>';
+  } else {
+    h += '<div class="vacio"><div class="icono">🛠️</div><h4>Dashboard no disponible por ahora</h4>' +
+         "<p>Este reporte se está preparando. Vuelve pronto.</p></div>";
+  }
+  h += "</div>";
+  main.innerHTML = h;
+}
+
+function vistaAdmin(main) {
+  let h = '<div class="tarjeta encabezado"><h2>Panel de administración</h2>' +
+          "<p>Aquí conectas los Power BI y ordenas los dashboards de cada módulo.</p></div>";
+
+  h +=
