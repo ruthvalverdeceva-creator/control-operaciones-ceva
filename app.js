@@ -1,6 +1,128 @@
+/* ==========================================================================
+   CONFIGURACIÓN DE SUPABASE Y CLIENTE
+   ========================================================================== */
+const SUPABASE_URL = 'https://bpwgyimcreewipewrynp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_z7CXbNSDMPB705qUpUp_7A_w19foNfz';
+
+const CLAVE_TOKEN = "ceva_token";
+let tokenSesion = null;
+try { tokenSesion = localStorage.getItem(CLAVE_TOKEN) || null; } catch (e) {}
+
+function crearCliente(token) {
+  const opciones = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
+  if (token) opciones.global = { headers: { "x-val-token": token } };
+  return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, opciones);
+}
+
+let supabaseClient = crearCliente(tokenSesion);
+
+function fijarToken(token) {
+  tokenSesion = token || null;
+  try { token ? localStorage.setItem(CLAVE_TOKEN, token) : localStorage.removeItem(CLAVE_TOKEN); } catch (e) {}
+  supabaseClient = crearCliente(tokenSesion);
+}
+
+let usuarioActual = null;
+
+const $ = s => document.querySelector(s);
+
+// ================= PÁGINA DE LOGIN =================
+document.addEventListener("submit", async e => {
+  if (!e.target || e.target.id !== "form-login") return;
+  e.preventDefault();
+  
+  const usuarioInput = $("#login-usuario");
+  const passwordInput = $("#login-password");
+  const errDiv = $("#error-login");
+  const btnIngresar = document.querySelector("#form-login .btn-ingresar");
+
+  if (!usuarioInput) return;
+
+  const usuario = usuarioInput.value.trim();
+  const pass = passwordInput ? passwordInput.value : "";
+
+  if (errDiv) errDiv.style.display = "none";
+  if (btnIngresar) { 
+    btnIngresar.disabled = true; 
+    btnIngresar.textContent = "INGRESANDO…"; 
+  }
+
+  try {
+    console.log("Intentando iniciar sesión con usuario:", usuario);
+    
+    const { data, error } = await supabaseClient.rpc("val_entrar", { 
+      p_usuario: usuario, 
+      p_password: pass || null 
+    });
+
+    console.log("Respuesta de Supabase:", data, error);
+
+    if (error) throw new Error("Error en Supabase: " + error.message);
+    if (!data || !data.ok) throw new Error((data && data.msg) || "Usuario o contraseña incorrectos en la base de datos.");
+    
+    fijarToken(data.token);
+    usuarioActual = { usuario: data.usuario, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
+    
+    const formLogin = $("#form-login");
+    if (formLogin) formLogin.reset();
+    
+    verificarEstadoSesion();
+  } catch (ex) {
+    console.error("Falla en login:", ex);
+    if (errDiv) { 
+      errDiv.textContent = ex.message; 
+      errDiv.style.display = "block"; 
+    } else {
+      alert(ex.message);
+    }
+  } finally {
+    if (btnIngresar) { 
+      btnIngresar.disabled = false; 
+      btnIngresar.textContent = "INGRESAR"; 
+    }
+  }
+});
+
+function verificarEstadoSesion() {
+  const vistaLogin = $("#vista-login");
+  const contenedorPrincipal = $("#contenedor-principal");
+  
+  if (usuarioActual) {
+    if (vistaLogin) vistaLogin.style.display = "none";
+    if (contenedorPrincipal) contenedorPrincipal.style.display = "flex";
+    const nombreDisplay = $("#nombre-usuario-display");
+    const cargoDisplay = $("#cargo-usuario-display");
+    if (nombreDisplay) nombreDisplay.textContent = usuarioActual.nombre;
+    if (cargoDisplay) cargoDisplay.textContent = usuarioActual.cargo;
+  } else {
+    if (vistaLogin) vistaLogin.style.display = "flex";
+    if (contenedorPrincipal) contenedorPrincipal.style.display = "none";
+  }
+}
+
+async function cargarPerfil() {
+  if (!tokenSesion) return null;
+  try {
+    const { data, error } = await supabaseClient.rpc("val_yo");
+    if (error || !data) { fijarToken(null); return null; }
+    return { usuario: data.usuario, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
+  } catch (err) { 
+    return null; 
+  }
+}
+
+// Inicialización al cargar la página
+(async function iniciar() {
+  usuarioActual = await cargarPerfil();
+  verificarEstadoSesion();
+})();
+
+// ================= GESTIÓN DE EXCEL Y LOGS =================
+
 // Función auxiliar para registrar mensajes en pantalla y consola
 function registrarLog(mensaje, esError = false) {
     const logDiv = document.getElementById('log');
+    if (!logDiv) return; // Si no está presente en la vista actual, solo imprime en consola
     const color = esError ? '#ff6b6b' : '#00ff00';
     logDiv.innerHTML += `<div style="color: ${color};">[${new Date().toLocaleTimeString()}] ${mensaje}</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
