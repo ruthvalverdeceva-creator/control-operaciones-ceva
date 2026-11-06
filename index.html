@@ -6,8 +6,10 @@
 <title>Control de Operaciones - CEVA Logistics</title>
 <!-- Vinculamos el archivo de estilos externo -->
 <link rel="stylesheet" href="styles.css">
-<!-- Librería de Supabase (versión fija para que no cambie sola) -->
+<!-- Librería de Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<!-- Librería SheetJS para procesar y leer archivos Excel (.xlsx / .csv) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -72,11 +74,6 @@
     <input type="text" id="input-nombre" placeholder="Ej: Paletas">
     <label>Enlace de Power BI</label>
     <input type="text" id="input-url" placeholder="https://app.powerbi.com/reportEmbed?reportId=...">
-    <div class="ayuda">
-      <strong>¿Dónde saco el enlace?</strong><br>
-      En Power BI: abre el reporte → <em>Archivo</em> → <em>Insertar informe</em> → <em>Sitio web o portal</em>.
-      Copia el enlace. Quien lo vea tendrá que iniciar sesión con su cuenta de la empresa.
-    </div>
     <div class="botones">
       <button class="btn gris" data-acc="cerrar-modal">Cancelar</button>
       <button class="btn" data-acc="guardar-modal">Guardar</button>
@@ -117,10 +114,6 @@
     <h3>Pegar lista de auxiliares</h3>
     <label>Una persona por línea: DNI, separador y nombre</label>
     <textarea id="lote-texto" placeholder="12345678	KIARA LOPEZ&#10;87654321	JUAN PEREZ"></textarea>
-    <div class="ayuda">
-      Puedes copiar dos columnas desde Excel (DNI y nombre) y pegarlas aquí tal cual.
-      También sirve escribir <em>12345678; KIARA LOPEZ</em>. Si un DNI ya existe, se actualiza su nombre.
-    </div>
     <div class="botones">
       <button class="btn gris" data-acc="aux-cerrar">Cancelar</button>
       <button class="btn" data-acc="aux-guardar-lote">Guardar lista</button>
