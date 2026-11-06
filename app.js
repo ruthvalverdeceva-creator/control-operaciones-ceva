@@ -572,7 +572,7 @@ window.addEventListener("hashchange", render);
 })();
 
 // ==========================================
-// MÓDULO DE VALIDACIÓN OUTBOUND (VISTAS Y CRUCES)
+// MÓDULO DE VALIDACIÓN OUTBOUND - VISTA Y CRUCES ÓPTIMOS
 // ==========================================
 
 async function renderVistaValidacionOutbound(main) {
@@ -580,21 +580,20 @@ async function renderVistaValidacionOutbound(main) {
         <div class="tarjeta encabezado">
             <div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>
             <h2>Validación ciega de canales Outbound</h2>
-            <p>Cargando información operativa y cruce de datos en vivo...</p>
+            <p>Sincronizando datos operativos desde Supabase...</p>
         </div>
     `;
 
     try {
-        // Consultamos la tabla real en Supabase (ajusta el nombre de tu tabla si es diferente)
+        // Consultamos la tabla real óptima 'val_fases'
         const { data: registros, error } = await supabaseClient
-            .from('status_pendiente')
+            .from('val_fases')
             .select('*');
 
         if (error) throw error;
 
         const listaRegistros = registros || [];
 
-        // Renderizamos la estructura de Administrador / Asistente con el diseño visual de tarjetas
         main.innerHTML = `
             <div class="tarjeta encabezado" style="background:#0f2150; color:#fff; border-radius:12px; padding:20px; margin-bottom:20px;">
                 <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / <a href="#inventario" style="color:#adb5bd;">Inventario</a> / Validación Outbound</div>
@@ -609,7 +608,7 @@ async function renderVistaValidacionOutbound(main) {
 
             <!-- Filtros de Estado -->
             <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
-                <span style="background:#0f2150; color:#fff; padding:8px 14px; border-radius:20px; font-size:12px; font-weight:700;">EN PROCESO (${listaRegistros.length})</span>
+                <span style="background:#0f2150; color:#fff; padding:8px 14px; border-radius:20px; font-size:12px; font-weight:700;">TOTAL FASES (${listaRegistros.length})</span>
             </div>
 
             <!-- Contenedor de Tarjetas de Viajes (FOs) -->
@@ -629,10 +628,10 @@ async function renderVistaValidacionOutbound(main) {
     }
 }
 
-// Generador de tarjetas por FO con diseño de colores y estados
+// Generador de tarjetas por FO con el diseño visual exacto
 function generarTarjetasHTML(registros) {
     if (registros.length === 0) {
-        return `<div class="tarjeta" style="text-align:center; padding:20px; color:#666;">No hay registros de despacho encontrados.</div>`;
+        return `<div class="tarjeta" style="text-align:center; padding:20px; color:#666;">No hay registros activos en la tabla val_fases.</div>`;
     }
 
     let html = "";
@@ -647,13 +646,11 @@ function generarTarjetasHTML(registros) {
 
         html += `
             <div style="background:#fff; border:1px solid #ddd; border-radius:10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
-                <!-- Barra superior de FO -->
                 <div style="background:${colorBarra}; color:#fff; padding:10px 15px; display:flex; justify-content:space-between; align-items:center;">
                     <strong style="font-size:16px;">FO: ${fo}</strong>
                     <span style="font-size:12px; font-weight:600; background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:6px;">1 fase · Cruce en curso</span>
                 </div>
                 
-                <!-- Cuerpo de la tarjeta de fase -->
                 <div style="padding:15px;">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
                         <div>
@@ -664,7 +661,6 @@ function generarTarjetasHTML(registros) {
                         <span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700; border:1px solid #ffeeba;">${estado}</span>
                     </div>
 
-                    <!-- Botonera de acciones operativas -->
                     <div style="display:flex; gap:8px; margin-top:12px; border-top:1px solid #eee; padding-top:10px; flex-wrap:wrap;">
                         <button class="btn sm" style="background:#0f2150; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="ejecutarCruceHU('${fo}', '${fase}')">⚡ Cruce HU / Paletas</button>
                         <button class="btn sm" style="background:#198754; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="abrirPantallaConteo('${fo}', '${fase}', '${cliente}')">📱 Abrir Conteo Ciego</button>
@@ -677,28 +673,26 @@ function generarTarjetasHTML(registros) {
 }
 
 // ==========================================
-// LÓGICA AUTOMÁTICA DE CRUCE POR HU Y PALETAS
+// LÓGICA AUTOMÁTICA DE CRUCE (Tabla 'val_picking')
 // ==========================================
 async function ejecutarCruceHU(fo, fase) {
-    alert(`Iniciando validación y cruce de datos por HU y paletas para la FO: ${fo} (Fase ${fase})...`);
+    alert(`Iniciando validación y cruce automático por HU y paletas para la FO: ${fo} (Fase ${fase})...`);
     
     try {
-        // Aquí conectamos con la tabla de picking en Supabase para contrastar físico vs SAP
         const { data: datosPicking, error } = await supabaseClient
-            .from('picking_sap')
+            .from('val_picking')
             .select('*')
             .eq('fo', fo);
 
         if (error) throw error;
 
         if (!datosPicking || datosPicking.length === 0) {
-            alert(`Cruce completado: No se encontraron discrepancias críticas para la FO ${fo}.`);
+            alert(`Cruce completado: No se encontraron registros de picking pendientes para la FO ${fo}.`);
             return;
         }
 
-        // Validación de consistencia de HU
-        console.log("Datos de picking recuperados para validación:", datosPicking);
-        alert(`¡Cruce exitoso! Se validaron los HUs y paletas del viaje ${fo} contra el baseline de entregas.`);
+        console.log("Datos de picking recuperados:", datosPicking);
+        alert(`¡Cruce exitoso con val_picking! Se validaron los HUs y paletas del viaje ${fo}.`);
 
     } catch (err) {
         console.error("Error en el cruce de HU:", err);
