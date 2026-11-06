@@ -6,8 +6,8 @@
 <title>Control de Operaciones - CEVA Logistics</title>
 <!-- Vinculamos el archivo de estilos externo -->
 <link rel="stylesheet" href="styles.css">
-<!-- Librería de Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Librería de Supabase (versión fija para que no cambie sola) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
 
@@ -16,11 +16,11 @@
   <div class="tarjeta-login">
     <h2>CONTROL DE<br>OPERACIONES</h2>
     <div class="sub-login">LATAM 400</div>
-    <div class="error-login" id="error-login">Usuario o contraseña incorrectos.</div>
+    <div class="error-login" id="error-login">Correo o contraseña incorrectos.</div>
     <form id="form-login">
-      <label>Usuario</label>
-      <input type="text" id="login-usuario" placeholder="Ingrese usuario" required autocomplete="username">
-      
+      <label>Correo</label>
+      <input type="email" id="login-correo" placeholder="nombre@empresa.com" required autocomplete="username">
+
       <div class="grupo-password">
         <label>Contraseña</label>
         <input type="password" id="login-password" placeholder="Ingrese contraseña" required autocomplete="current-password">
@@ -47,8 +47,8 @@
     </div>
 
     <div class="usuario">
-      <strong id="nombre-usuario-display">Ruth Valverde</strong>
-      <span id="cargo-usuario-display">Practicante de Inventario</span><br>
+      <strong id="nombre-usuario-display"></strong>
+      <span id="cargo-usuario-display"></span><br>
       <span class="etiqueta-rol" id="etiqueta-rol"></span>
     </div>
 
@@ -64,7 +64,7 @@
   <main class="contenido" id="principal"></main>
 </div>
 
-<!-- VENTANA EMERGENTE -->
+<!-- VENTANA EMERGENTE: DASHBOARDS -->
 <div class="fondo-modal" id="modal">
   <div class="modal">
     <h3 id="modal-titulo"></h3>
@@ -80,6 +80,38 @@
     <div class="botones">
       <button class="btn gris" data-acc="cerrar-modal">Cancelar</button>
       <button class="btn" data-acc="guardar-modal">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- VENTANA EMERGENTE: UN AUXILIAR -->
+<div class="fondo-modal" id="modal-aux">
+  <div class="modal">
+    <h3 id="modal-aux-titulo">Nuevo auxiliar</h3>
+    <label>DNI</label>
+    <input type="text" id="aux-dni" placeholder="Solo números o letras, sin espacios" maxlength="15" inputmode="text" autocomplete="off">
+    <label>Nombre</label>
+    <input type="text" id="aux-nombre" placeholder="Ej: KIARA LOPEZ" autocomplete="off">
+    <div class="botones">
+      <button class="btn gris" data-acc="aux-cerrar">Cancelar</button>
+      <button class="btn" data-acc="aux-guardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- VENTANA EMERGENTE: PEGAR LISTA DE AUXILIARES -->
+<div class="fondo-modal" id="modal-lote">
+  <div class="modal">
+    <h3>Pegar lista de auxiliares</h3>
+    <label>Una persona por línea: DNI, separador y nombre</label>
+    <textarea id="lote-texto" placeholder="12345678	KIARA LOPEZ&#10;87654321	JUAN PEREZ"></textarea>
+    <div class="ayuda">
+      Puedes copiar dos columnas desde Excel (DNI y nombre) y pegarlas aquí tal cual.
+      También sirve escribir <em>12345678; KIARA LOPEZ</em>. Si un DNI ya existe, se actualiza su nombre.
+    </div>
+    <div class="botones">
+      <button class="btn gris" data-acc="aux-cerrar">Cancelar</button>
+      <button class="btn" data-acc="aux-guardar-lote">Guardar lista</button>
     </div>
   </div>
 </div>
