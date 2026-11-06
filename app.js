@@ -572,7 +572,7 @@ window.addEventListener("hashchange", render);
 })();
 
 // ==========================================
-// MÓDULO DE VALIDACIÓN OUTBOUND - CONEXIÓN DRIVE & SUPABASE
+// MÓDULO DE VALIDACIÓN OUTBOUND - VISTAS Y CRUCES ÓPTIMOS
 // ==========================================
 
 async function renderVistaValidacionOutbound(main) {
@@ -588,7 +588,6 @@ async function renderVistaValidacionOutbound(main) {
     `;
 
     try {
-        // Consultamos la tabla real de fases en Supabase
         const { data: registros, error } = await supabaseClient
             .from('val_fases')
             .select('*');
@@ -632,13 +631,13 @@ async function renderVistaValidacionOutbound(main) {
     }
 }
 
-// Generador de tarjetas con diseño profesional
+// Generador de tarjetas con diseño profesional y colores de conos y canales
 function generarTarjetasHTML(registros) {
     if (registros.length === 0) {
         return `
             <div class="tarjeta" style="text-align:center; padding:25px; background:#fff; border-radius:10px; border:1px solid #ddd;">
                 <h3 style="color:#0f2150; margin-bottom:8px;">No hay fases cargadas actualmente</h3>
-                <p style="color:#666; font-size:13px; margin-bottom:15px;">Haz clic en el botón verde <b>"SINCRONIZAR DRIVE DE DESPACHOS"</b> para jalar los datos del Excel de despachos y stock.</p>
+                <p style="color:#666; font-size:13px; margin-bottom:15px;">Haz clic en el botón verde <b>"SINCRONIZAR DRIVE DE DESPACHOS"</b> para jalar los datos de canales y stock.</p>
             </div>
         `;
     }
@@ -648,8 +647,10 @@ function generarTarjetasHTML(registros) {
         let fo = v.fo || v.fo_real || "FO-S/N";
         let fase = v.fase || "01";
         let cliente = v.cliente || "CLIENTE GENERAL";
-        let canal = v.canal || v.sistema || "CNL-OUT-100";
-        let validador = v.validador || v.usuario || "ASISTENTE";
+        let canal = v.canal || "CNL-OUT-100";
+        let sistema = v.sistema || "SAP EWM";
+        let cono = v.cono || "AMARILLO";
+        let validador = v.validador || "KIARA";
         let estado = v.estadoApp || v.estado || "EN PROCESO";
         let colorBarra = estado === "CERRADO" ? "#198754" : (estado === "PENDIENTE" ? "#6c757d" : "#0d6efd");
 
@@ -657,14 +658,14 @@ function generarTarjetasHTML(registros) {
             <div style="background:#fff; border:1px solid #ddd; border-radius:10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
                 <div style="background:${colorBarra}; color:#fff; padding:10px 15px; display:flex; justify-content:space-between; align-items:center;">
                     <strong style="font-size:16px;">FO: ${fo}</strong>
-                    <span style="font-size:12px; font-weight:600; background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:6px;">1 fase · Cruce en curso</span>
+                    <span style="font-size:12px; font-weight:600; background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:6px;">Cono: ${cono}</span>
                 </div>
                 
                 <div style="padding:15px;">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
                         <div>
-                            <div style="font-size:15px; font-weight:700; color:#0f2150;">FASE: ${fase} - ${cliente}</div>
-                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>Canal/Sist:</b> ${canal}</div>
+                            <div style="font-size:15px; font-weight:700; color:#0f2150;">FASE: ${fase} -${cliente}</div>
+                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>Canal Físico/Sistema:</b> ${canal} \vert{}${sistema}</div>
                             <div style="font-size:13px; color:#555; margin-top:2px;"><b>VALIDADOR:</b> ${validador}</div>
                         </div>
                         <span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700; border:1px solid #ffeeba;">${estado}</span>
@@ -675,47 +676,3 @@ function generarTarjetasHTML(registros) {
                         <button class="btn sm" style="background:#198754; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="abrirPantallaConteo('${fo}', '${fase}', '${cliente}')">📱 Abrir Conteo Ciego</button>
                     </div>
                 </div>
-            </div>
-        `;
-    });
-    return html;
-}
-
-// ==========================================
-// FUNCIÓN DE SINCRONIZACIÓN CON EL DRIVE DE DESPACHOS
-// ==========================================
-async function sincronizarDriveDespachos() {
-    alert("Conectando con el SharePoint / Drive de Despachos para actualizar Stock y Picking...");
-    
-    try {
-        // Aquí conectamos con tu archivo oficial mapeado (ej: OCTUBRE - DESPACHO.xlsx)
-        // Simulamos la sincronización exitosa y recarga de la vista
-        alert("¡Sincronización exitosa con el Drive de Despachos! Los datos de stock y fases han sido actualizados.");
-        renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body);
-    } catch (err) {
-        console.error("Error al sincronizar con el Drive:", err);
-        alert("Error al conectar con el archivo de despachos: " + err.message);
-    }
-}
-
-// ==========================================
-// LÓGICA AUTOMÁTICA DE CRUCE POR HU Y PALETAS
-// ==========================================
-async function ejecutarCruceHU(fo, fase) {
-    alert(`Ejecutando cruce automático por HU y paletas para la FO: ${fo} (Fase ${fase})...`);
-    
-    try {
-        const { data: datosPicking, error } = await supabaseClient
-            .from('val_picking')
-            .select('*')
-            .eq('fo', fo);
-
-        if (error) throw error;
-
-        alert(`¡Cruce verificado con éxito! Los HUs y paletas de la FO ${fo} coinciden con el baseline de entregas.`);
-
-    } catch (err) {
-        console.error("Error en el cruce de HU:", err);
-        alert(`Error en la validación de cruce: ${err.message}`);
-    }
-}
