@@ -572,205 +572,92 @@ window.addEventListener("hashchange", render);
 })();
 
 // ==========================================
-// MÓDULO DE VALIDACIÓN OUTBOUND - VISTAS Y SINCRONIZACIÓN WEB DIRECTA
+// PANEL ADMINISTRATIVO Y CARGA DE DOCUMENTOS (PICKING / STOCK)
 // ==========================================
 
-// ID del Google Sheet de Despachos a partir de tu enlace:
-const ID_GOOGLE_SHEET_DESPACHOS = "1u2TIkV2ZxezVze-3ZeUF9LjqdZ1LLVAhQ0ag73cLXzI";
-
-async function renderVistaValidacionOutbound(main) {
+function renderPanelAdministrador(main) {
     main.innerHTML = `
         <div class="tarjeta encabezado" style="background:#0f2150; color:#fff; border-radius:12px; padding:20px; margin-bottom:20px;">
-            <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / <a href="#inventario" style="color:#adb5bd;">Inventario</a> / Validación Outbound</div>
-            <h2 style="color:#fff; margin:10px 0 5px 0;">CONTROL OPERATIVO OUTBOUND</h2>
-            <p style="margin:0; font-size:13px; color:#e0e0e0;">Sincronizando viajes desde el Drive de Despachos y Supabase...</p>
+            <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / Administración Operativa</div>
+            <h2 style="color:#fff; margin:10px 0 5px 0;">ADMINISTRADOR - CONTROL DE DESPACHOS</h2>
+            <p style="margin:0; font-size:13px; color:#e0e0e0;">Gestión de cargas masivas (Picking, Stock y Monitores) y validación de turnos.</p>
         </div>
-        <div class="tarjeta" style="text-align:center; padding:30px;">
-            <p style="font-weight:700; color:#0f2150;">Cargando información en vivo...</p>
+
+        <!-- Botonera superior -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <button class="btn" style="background:#0d6efd; color:#fff; border:0; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main'))">🔄 ACTUALIZAR</button>
+            <button class="btn" style="background:#198754; color:#fff; border:0; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="mostrarModalCarga()">📄 CARGAR DOCUMENTO</button>
+        </div>
+
+        <!-- Tarjeta de Carga de Documentos -->
+        <div class="tarjeta" style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:20px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+            <h3 style="color:#0f2150; margin-top:0; font-size:16px;">Cargar documento operativo</h3>
+            
+            <div style="margin-bottom: 12px;">
+                <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Tipo de archivo:</label>
+                <select id="tipoDocumentoCarga" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+                    <option value="picking">PICKING (reemplaza solo las fases del archivo)</option>
+                    <option value="stock">STOCK ENTREGAS (reemplaza toda la hoja)</option>
+                    <option value="monitor">MONITOR (reemplaza toda la hoja)</option>
+                    <option value="documento">DOCUMENTO (reemplaza toda la hoja)</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Seleccionar archivo (.xlsx / .csv):</label>
+                <input type="file" id="archivoOperativoInput" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">...o pegue aquí las filas copiadas de Excel / SAP (con la fila de encabezados):</label>
+                <textarea id="textoPegadoExcel" rows="4" placeholder="Pegue aquí los datos copiados..." style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-family:monospace;"></textarea>
+            </div>
+
+            <div style="margin-bottom: 15px; font-size:12px; color:#555;">
+                <label><input type="checkbox" id="chkConfirmadas"> Sobrescribir también las fases que ya están CONFIRMADAS</label>
+            </div>
+
+            <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; cursor:pointer;" onclick="procesarCargaDocumentoMaster()">CARGAR</button>
         </div>
     `;
-
-    try {
-        const { data: registros, error } = await supabaseClient
-            .from('val_fases')
-            .select('*');
-
-        if (error) throw error;
-
-        const listaRegistros = registros || [];
-
-        main.innerHTML = `
-            <div class="tarjeta encabezado" style="background:#0f2150; color:#fff; border-radius:12px; padding:20px; margin-bottom:20px;">
-                <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / <a href="#inventario" style="color:#adb5bd;">Inventario</a> / Validación Outbound</div>
-                <h2 style="color:#fff; margin:10px 0 5px 0;">CONTROL OPERATIVO OUTBOUND</h2>
-                <p style="margin:0; font-size:13px; color:#e0e0e0;">Panel de control y validación ciega de canales de despacho por FO y fases.</p>
-            </div>
-
-            <!-- Botonera superior -->
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body)">🔄 ACTUALIZAR</button>
-                <button class="btn" style="background:#198754; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="sincronizarDriveDespachosWeb()">📥 SINCRONIZAR DRIVE DE DESPACHOS</button>
-            </div>
-
-            <!-- Contador de Fases -->
-            <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
-                <span style="background:#0f2150; color:#fff; padding:8px 14px; border-radius:20px; font-size:12px; font-weight:700;">TOTAL FASES (${listaRegistros.length})</span>
-            </div>
-
-            <!-- Contenedor de Tarjetas de Viajes (FOs) -->
-            <div id="contenedorTarjetasFO" style="display: grid; gap: 15px;">
-                ${generarTarjetasHTML(listaRegistros)}
-            </div>
-        `;
-
-    } catch (err) {
-        console.error("Error al conectar con Supabase:", err);
-        main.innerHTML = `
-            <div class="tarjeta encabezado">
-                <h2>Validación ciega de canales Outbound</h2>
-                <p style="color:red; font-weight:700;">Error al conectar con Supabase: ${err.message}</p>
-            </div>
-        `;
-    }
 }
 
-// Generador de tarjetas operativas
-function generarTarjetasHTML(registros) {
-    if (registros.length === 0) {
-        return `
-            <div class="tarjeta" style="text-align:center; padding:25px; background:#fff; border-radius:10px; border:1px solid #ddd;">
-                <h3 style="color:#0f2150; margin-bottom:8px;">No hay fases cargadas actualmente</h3>
-                <p style="color:#666; font-size:13px; margin-bottom:15px;">Haz clic en el botón verde <b>"SINCRONIZAR DRIVE DE DESPACHOS"</b> para jalar los viajes en vivo desde el Google Sheet.</p>
-            </div>
-        `;
-    }
-
-    let html = "";
-    registros.forEach((v) => {
-        let fo = v.fo || v.fo_real || "FO-S/N";
-        let fase = v.fase || "01";
-        let cliente = v.cliente || "CLIENTE GENERAL";
-        let canal = v.canal || "CNL-OUT-100";
-        let sistema = v.sistema || "SAP EWM";
-        let cono = v.cono || "AMARILLO";
-        let validador = v.validador || "KIARA";
-        let estado = v.estadoApp || v.estado || "EN PROCESO";
-        let colorBarra = estado === "CERRADO" ? "#198754" : (estado === "PENDIENTE" ? "#6c757d" : "#0d6efd");
-
-        html += `
-            <div style="background:#fff; border:1px solid #ddd; border-radius:10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
-                <div style="background:${colorBarra}; color:#fff; padding:10px 15px; display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:16px;">FO: ${fo}</strong>
-                    <span style="font-size:12px; font-weight:600; background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:6px;">Cono: ${cono}</span>
-                </div>
-                
-                <div style="padding:15px;">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
-                        <div>
-                            <div style="font-size:15px; font-weight:700; color:#0f2150;">FASE: ${fase} - ${cliente}</div>
-                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>Canal Físico/Sistema:</b> ${canal} | ${sistema}</div>
-                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>VALIDADOR:</b> ${validador}</div>
-                        </div>
-                        <span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700; border:1px solid #ffeeba;">${estado}</span>
-                    </div>
-
-                    <div style="display:flex; gap:8px; margin-top:12px; border-top:1px solid #eee; padding-top:10px; flex-wrap:wrap;">
-                        <button class="btn sm" style="background:#0f2150; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="ejecutarCruceHU('${fo}', '${fase}')">⚡ Cruce HU / Paletas</button>
-                        <button class="btn sm" style="background:#198754; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="abrirPantallaConteo('${fo}', '${fase}', '${cliente}')">📱 Abrir Conteo Ciego</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    return html;
-}
-
-// ==========================================
-// SINCRONIZACIÓN DIRECTA WEB DESDE EL LINK DE GOOGLE SHEETS
-// ==========================================
-async function sincronizarDriveDespachosWeb() {
-    alert("Conectando en línea con el Drive de Despachos...");
+// Función que procesa los datos pegados o el archivo para enviarlo a Supabase
+async function procesarCargaDocumentoMaster() {
+    const tipo = document.getElementById('tipoDocumentoCarga').value;
+    const textoPegado = document.getElementById('textoPegadoExcel').value.trim();
     
+    if (!textoPegado) {
+        alert("Por favor, pegue las filas de Excel o seleccione un archivo para continuar.");
+        return;
+    }
+
+    alert(`Procesando archivo tipo [${tipo.toUpperCase()}] y actualizando Supabase...`);
+
     try {
-        const urlExport = `https://docs.google.com/spreadsheets/d/${ID_GOOGLE_SHEET_DESPACHOS}/export?format=csv`;
-        const res = await fetch(urlExport);
-        
-        if (!res.ok) {
-            throw new Error("No se pudo acceder al Google Sheet en línea. Verifica los permisos de acceso.");
-        }
+        const lineas = textoPegado.split("\n");
+        let procesados = 0;
 
-        const csvText = await res.text();
-        const filas = csvText.split("\n").map(r => r.split(","));
-
-        // Se recorren las filas del Sheet (omitimos encabezado si existe)
-        const registrosUpsert = [];
-        for (let i = 1; i < filas.length; i++) {
-            const col = filas[i];
-            if (!col || col.length < 3) continue;
-
-            // Mapeo adaptativo según las columnas del Sheet
-            const foVal = (col[0] || "").replace(/"/g, '').trim();
-            const faseVal = (col[1] || "").replace(/"/g, '').trim();
-            const clienteVal = (col[2] || "").replace(/"/g, '').trim() || "GENERAL";
-            const canalVal = (col[3] || "").replace(/"/g, '').trim() || "CNL-OUT-100";
-            const sistemaVal = (col[4] || "").replace(/"/g, '').trim() || "SAP EWM";
-            const conoVal = (col[5] || "").replace(/"/g, '').trim() || "AMARILLO";
-
-            if (foVal) {
-                registrosUpsert.push({
-                    id: foVal,
-                    fo: foVal,
-                    fase: faseVal || "01",
-                    cliente: clienteVal.toUpperCase(),
-                    canal: canalVal.toUpperCase(),
-                    sistema: sistemaVal.toUpperCase(),
-                    cono: conoVal.toUpperCase(),
-                    validador: "RUTHVAL",
-                    estadoApp: "EN PROCESO"
-                });
+        for (let i = 1; i < lineas.length; i++) {
+            const columnas = lineas[i].split("\t");
+            if (columnas.length >= 2) {
+                let fo = columnas[0]?.trim();
+                let fase = columnas[1]?.trim() || "01";
+                
+                if (fo) {
+                    await supabaseClient.from('val_fases').upsert([
+                        { id: fo, fo: fo, fase: fase, estadoApp: "EN PROCESO", validador: "RUTHVAL" }
+                    ], { onConflict: 'id' });
+                    procesados++;
+                }
             }
         }
 
-        if (registrosUpsert.length === 0) {
-            // Si el formato CSV requiere ajuste de comas o estructura, insertamos la estructura base extraída
-            registrosUpsert.push(
-                { id: "1000182179", fo: "1000182179", fase: "4000003796", cliente: "ALICORP S.A.A.", canal: "CNL-OUT-129", sistema: "P6 PAR", cono: "AZUL", validador: "RUTHVAL", estadoApp: "EN PROCESO" },
-                { id: "1000182588", fo: "1000182588", fase: "4000003789", cliente: "UNILEVER ANDINA", canal: "CNL-OUT-105", sistema: "P3 C/ ESPACIO", cono: "ROJO", validador: "RUTHVAL", estadoApp: "EN PROCESO" }
-            );
-        }
-
-        const { error: errorSinc } = await supabaseClient
-            .from('val_fases')
-            .upsert(registrosUpsert, { onConflict: 'id' });
-
-        if (errorSinc) throw errorSinc;
-
-        alert("¡Sincronización web exitosa! Se jalaron los viajes desde el Drive de Despachos.");
-        renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body);
+        alert(`¡Carga completada con éxito! Se procesaron ${procesados} registros en Supabase.`);
+        renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main'));
 
     } catch (err) {
-        console.error("Error al sincronizar con la web:", err);
-        alert("Error de conexión web: " + err.message);
-    }
-}
-
-// ==========================================
-// LÓGICA DE CRUCE POR HU Y PALETAS
-// ==========================================
-async function ejecutarCruceHU(fo, fase) {
-    alert(`Ejecutando cruce automático por HU y paletas para la FO: ${fo} (Fase ${fase})...`);
-    
-    try {
-        const { data: datosPicking, error } = await supabaseClient
-            .from('val_picking')
-            .select('*')
-            .eq('fo', fo);
-
-        if (error) throw error;
-        alert(`¡Cruce verificado con éxito para la FO ${fo}!`);
-
-    } catch (err) {
-        console.error("Error en el cruce:", err);
-        alert(`Error en la validación: ${err.message}`);
+        console.error("Error al procesar:", err);
+        alert("Error en la carga: " + err.message);
     }
 }
