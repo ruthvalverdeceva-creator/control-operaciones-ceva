@@ -372,8 +372,6 @@ async function sincronizarDriveDespachosWeb() {
         alert("¡Sincronización web completada con éxito!");
         renderVistaValidacionOutbound(document.querySelector('main'));
 
-    } canvas {
-        // ...
     } catch (err) {
         console.error("Error en sincronización web:", err);
         alert("Error: " + err.message);
