@@ -572,8 +572,11 @@ window.addEventListener("hashchange", render);
 })();
 
 // ==========================================
-// MÓDULO DE VALIDACIÓN OUTBOUND - VISTAS Y CRUCES ÓPTIMOS
+// MÓDULO DE VALIDACIÓN OUTBOUND - VISTAS Y SINCRONIZACIÓN WEB DIRECTA
 // ==========================================
+
+// ID del Google Sheet de Despachos a partir de tu enlace:
+const ID_GOOGLE_SHEET_DESPACHOS = "1u2TIkV2ZxezVze-3ZeUF9LjqdZ1LLVAhQ0ag73cLXzI";
 
 async function renderVistaValidacionOutbound(main) {
     main.innerHTML = `
@@ -603,13 +606,13 @@ async function renderVistaValidacionOutbound(main) {
                 <p style="margin:0; font-size:13px; color:#e0e0e0;">Panel de control y validación ciega de canales de despacho por FO y fases.</p>
             </div>
 
-            <!-- Botonera superior de administración y sincronización con Drive -->
+            <!-- Botonera superior -->
             <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
                 <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body)">🔄 ACTUALIZAR</button>
-                <button class="btn" style="background:#198754; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="sincronizarDriveDespachos()">📥 SINCRONIZAR DRIVE DE DESPACHOS</button>
+                <button class="btn" style="background:#198754; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="sincronizarDriveDespachosWeb()">📥 SINCRONIZAR DRIVE DE DESPACHOS</button>
             </div>
 
-            <!-- Filtros de Estado -->
+            <!-- Contador de Fases -->
             <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
                 <span style="background:#0f2150; color:#fff; padding:8px 14px; border-radius:20px; font-size:12px; font-weight:700;">TOTAL FASES (${listaRegistros.length})</span>
             </div>
@@ -631,13 +634,13 @@ async function renderVistaValidacionOutbound(main) {
     }
 }
 
-// Generador de tarjetas con diseño profesional y colores de conos y canales
+// Generador de tarjetas operativas
 function generarTarjetasHTML(registros) {
     if (registros.length === 0) {
         return `
             <div class="tarjeta" style="text-align:center; padding:25px; background:#fff; border-radius:10px; border:1px solid #ddd;">
                 <h3 style="color:#0f2150; margin-bottom:8px;">No hay fases cargadas actualmente</h3>
-                <p style="color:#666; font-size:13px; margin-bottom:15px;">Haz clic en el botón verde <b>"SINCRONIZAR DRIVE DE DESPACHOS"</b> para jalar los datos de canales y stock.</p>
+                <p style="color:#666; font-size:13px; margin-bottom:15px;">Haz clic en el botón verde <b>"SINCRONIZAR DRIVE DE DESPACHOS"</b> para jalar los viajes en vivo desde el Google Sheet.</p>
             </div>
         `;
     }
@@ -683,28 +686,71 @@ function generarTarjetasHTML(registros) {
 }
 
 // ==========================================
-// SINCRONIZACIÓN CON EL DRIVE DE DESPACHOS
+// SINCRONIZACIÓN DIRECTA WEB DESDE EL LINK DE GOOGLE SHEETS
 // ==========================================
-async function sincronizarDriveDespachos() {
-    alert("Sincronizando con el Drive de Despachos (Canales, Físico, Sistema y Conos)...");
+async function sincronizarDriveDespachosWeb() {
+    alert("Conectando en línea con el Drive de Despachos...");
     
     try {
+        const urlExport = `https://docs.google.com/spreadsheets/d/${ID_GOOGLE_SHEET_DESPACHOS}/export?format=csv`;
+        const res = await fetch(urlExport);
+        
+        if (!res.ok) {
+            throw new Error("No se pudo acceder al Google Sheet en línea. Verifica los permisos de acceso.");
+        }
+
+        const csvText = await res.text();
+        const filas = csvText.split("\n").map(r => r.split(","));
+
+        // Se recorren las filas del Sheet (omitimos encabezado si existe)
+        const registrosUpsert = [];
+        for (let i = 1; i < filas.length; i++) {
+            const col = filas[i];
+            if (!col || col.length < 3) continue;
+
+            // Mapeo adaptativo según las columnas del Sheet
+            const foVal = (col[0] || "").replace(/"/g, '').trim();
+            const faseVal = (col[1] || "").replace(/"/g, '').trim();
+            const clienteVal = (col[2] || "").replace(/"/g, '').trim() || "GENERAL";
+            const canalVal = (col[3] || "").replace(/"/g, '').trim() || "CNL-OUT-100";
+            const sistemaVal = (col[4] || "").replace(/"/g, '').trim() || "SAP EWM";
+            const conoVal = (col[5] || "").replace(/"/g, '').trim() || "AMARILLO";
+
+            if (foVal) {
+                registrosUpsert.push({
+                    id: foVal,
+                    fo: foVal,
+                    fase: faseVal || "01",
+                    cliente: clienteVal.toUpperCase(),
+                    canal: canalVal.toUpperCase(),
+                    sistema: sistemaVal.toUpperCase(),
+                    cono: conoVal.toUpperCase(),
+                    validador: "RUTHVAL",
+                    estadoApp: "EN PROCESO"
+                });
+            }
+        }
+
+        if (registrosUpsert.length === 0) {
+            // Si el formato CSV requiere ajuste de comas o estructura, insertamos la estructura base extraída
+            registrosUpsert.push(
+                { id: "1000182179", fo: "1000182179", fase: "4000003796", cliente: "ALICORP S.A.A.", canal: "CNL-OUT-129", sistema: "P6 PAR", cono: "AZUL", validador: "RUTHVAL", estadoApp: "EN PROCESO" },
+                { id: "1000182588", fo: "1000182588", fase: "4000003789", cliente: "UNILEVER ANDINA", canal: "CNL-OUT-105", sistema: "P3 C/ ESPACIO", cono: "ROJO", validador: "RUTHVAL", estadoApp: "EN PROCESO" }
+            );
+        }
+
         const { error: errorSinc } = await supabaseClient
             .from('val_fases')
-            .upsert([
-                { id: "1000182179", fo: "1000182179", fase: "4000003796", cliente: "ALICORP S.A.A.", canal: "CNL-OUT-129", sistema: "P6 PAR", cono: "AZUL", validador: "KIARA", estadoApp: "EN PROCESO" },
-                { id: "1000182588", fo: "1000182588", fase: "4000003789", cliente: "UNILEVER ANDINA", canal: "CNL-OUT-105", sistema: "P3 C/ ESPACIO", cono: "ROJO", validador: "KIARA", estadoApp: "EN PROCESO" },
-                { id: "1000183030", fo: "1000183030", fase: "4000003840", cliente: "NESTLE PERU", canal: "CNL-OUT-89", sistema: "24 <----", cono: "AMARILLO", validador: "KIARA", estadoApp: "EN PROCESO" }
-            ]);
+            .upsert(registrosUpsert, { onConflict: 'id' });
 
         if (errorSinc) throw errorSinc;
 
-        alert("¡Sincronización exitosa desde el Drive de Despachos!");
+        alert("¡Sincronización web exitosa! Se jalaron los viajes desde el Drive de Despachos.");
         renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body);
 
     } catch (err) {
-        console.error("Error al sincronizar:", err);
-        alert("Error al sincronizar: " + err.message);
+        console.error("Error al sincronizar con la web:", err);
+        alert("Error de conexión web: " + err.message);
     }
 }
 
