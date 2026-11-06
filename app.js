@@ -3,10 +3,24 @@
    ========================================================================== */
 const SUPABASE_URL = 'https://bpwgyimcreewipewrynp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_z7CXbNSDMPB705qUpUp_7A_w19foNfz';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Los usuarios ya NO viven en el código: ingresan con su cuenta de Supabase (correo + contraseña).
-// El rol (admin / asistente) sale de la tabla val_perfiles.
+// Las personas NO viven en el código: están en la tabla val_usuarios de Supabase y se
+// administran desde el panel. Quien ingresa recibe un código de sesión (token) que se guarda
+// en este navegador y se envía en cada petición; la base de datos decide qué puede ver cada rol.
+const CLAVE_TOKEN = "ceva_token";
+let tokenSesion = null;
+try { tokenSesion = localStorage.getItem(CLAVE_TOKEN) || null; } catch (e) {}
+function crearCliente(token) {
+  const opciones = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
+  if (token) opciones.global = { headers: { "x-val-token": token } };
+  return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, opciones);
+}
+let supabaseClient = crearCliente(tokenSesion);
+function fijarToken(token) {
+  tokenSesion = token || null;
+  try { token ? localStorage.setItem(CLAVE_TOKEN, token) : localStorage.removeItem(CLAVE_TOKEN); } catch (e) {}
+  supabaseClient = crearCliente(tokenSesion);
+}
 
 // Estructura base por defecto de tus módulos
 const BASE = [
@@ -36,7 +50,8 @@ const BASE = [
 ];
 
 const SECCIONES = [
-  { id: "reportes", nombre: "Reportes", icono: "📊", desc: "Dashboards de Power BI organizados por módulo.", ruta: "#reportes" }
+  { id: "reportes", nombre: "Reportes", icono: "📊", desc: "Dashboards de Power BI organizados por módulo.", ruta: "#reportes" },
+  { id: "inventario", nombre: "Inventario", icono: "📦", desc: "Herramientas operativas: validación ciega de canales Outbound.", ruta: "#inventario" }
 ];
 
 let CONFIG = JSON.parse(JSON.stringify(BASE));
@@ -66,15 +81,13 @@ async function cargarConfiguracionRemota() {
   render();
 }
 
-// Devuelve el perfil de quien tiene sesión en Supabase, o null (y cierra la sesión si no tiene acceso)
+// Quién tiene sesión (según el token guardado). null si no hay o ya venció.
 async function cargarPerfil() {
+  if (!tokenSesion) return null;
   try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) return null;
-    const { data, error } = await supabaseClient.from('val_perfiles')
-      .select('nombre, cargo, rol, activo').eq('id', session.user.id).maybeSingle();
-    if (error || !data || !data.activo) { await supabaseClient.auth.signOut(); return null; }
-    return { id: session.user.id, correo: session.user.email, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
+    const { data, error } = await supabaseClient.rpc("val_yo");
+    if (error || !data) { fijarToken(null); return null; }
+    return { usuario: data.usuario, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
   } catch (err) { console.error("Error al cargar el perfil:", err); return null; }
 }
 
@@ -105,20 +118,25 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-/* ---------- Lógica de Login (Supabase Auth) ---------- */
+/* ---------- Lógica de Login (usuario + contraseña; auxiliares solo DNI) ---------- */
 document.addEventListener("submit", async e => {
   if (!e.target || e.target.id !== "form-login") return;
   e.preventDefault();
-  const correo = $("#login-correo").value.trim().toLowerCase();
+  const usuario = $("#login-usuario").value.trim().toLowerCase();
   const pass = $("#login-password").value;
   const err = $("#error-login"), btn = $("#form-login .btn-ingresar");
   err.style.display = "none"; btn.disabled = true; btn.textContent = "INGRESANDO…";
   try {
-    const { error } = await supabaseClient.auth.signInWithPassword({ email: correo, password: pass });
-    if (error) throw new Error("Correo o contraseña incorrectos.");
-    const perfil = await cargarPerfil();
-    if (!perfil) throw new Error("Tu cuenta no tiene acceso a esta plataforma. Consulta con la administradora.");
-    usuarioActual = perfil;
+    const { data, error } = await supabaseClient.rpc("val_entrar", { p_usuario: usuario, p_password: pass || null });
+    if (error) throw new Error("No se pudo conectar. Revisa tu internet e inténtalo de nuevo.");
+    if (!data || !data.ok) throw new Error((data && data.msg) || "Usuario o contraseña incorrectos.");
+    if (data.rol === "auxiliar") {
+      fijarToken(data.token);
+      // La pantalla móvil de validación se está preparando (validar.html)
+      throw new Error("Tu acceso es correcto, pero la pantalla de validación para auxiliares aún no está disponible. Avisa a la administradora.");
+    }
+    fijarToken(data.token);
+    usuarioActual = { usuario: data.usuario, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
     $("#form-login").reset();
     verificarEstadoSesion();
   } catch (ex) {
@@ -130,7 +148,8 @@ document.addEventListener("submit", async e => {
 
 document.addEventListener("click", async e => {
   if (e.target && e.target.id === "btn-cerrar-sesion") {
-    await supabaseClient.auth.signOut();
+    try { await supabaseClient.rpc("val_salir"); } catch (ex) {}
+    fijarToken(null);
     usuarioActual = null; AUX = null;
     verificarEstadoSesion();
     return;
@@ -197,6 +216,7 @@ function render() {
   if (!main) return;
 
   if (p[0] === "admin" && esAdmin()) vistaAdmin(main);
+  else if (p[0] === "inventario") vistaInventario(main, p[1]);
   else if (p[0] === "reportes") { if (p[1]) vistaModulo(main, p[1], p[2]); else vistaReportes(main); }
   else vistaInicio(main);
   window.scrollTo(0, 0);
@@ -207,6 +227,9 @@ function dibujarMenu(p) {
   SECCIONES.forEach(s => {
     const dentro = p[0] === s.id;
     h += '<a href="' + s.ruta + '" class="' + (dentro && !p[1] ? "activo" : "") + '">' + esc(s.icono) + " " + esc(s.nombre) + "</a>";
+    if (dentro && s.id === "inventario") {
+      h += '<a class="sub ' + (p[1] === "validacion" ? "activo" : "") + '" href="#inventario/validacion">✅ Validación Outbound</a>';
+    }
     if (dentro && s.id === "reportes") {
       CONFIG.forEach(m => {
         h += '<a class="sub ' + (p[1] === m.id ? "activo" : "") + '" href="#reportes/' + esc(m.id) + '">' + esc(m.icono) + " " + esc(m.nombre) + "</a>";
@@ -225,7 +248,7 @@ function vistaInicio(main) {
   let h = '<div class="tarjeta encabezado"><h2>Panel Principal</h2>' +
           '<p>Elige una sección para continuar.</p></div><div class="grid">';
   SECCIONES.forEach(s => {
-    const meta = s.id === "reportes" ? CONFIG.length + " módulos" : "";
+    const meta = s.id === "reportes" ? CONFIG.length + " módulos" : s.id === "inventario" ? "1 herramienta" : "";
     h += '<a class="tarjeta modulo" href="' + s.ruta + '">' +
            '<div class="icono">' + esc(s.icono) + '</div>' +
            '<h3>' + esc(s.nombre.toUpperCase()) + '</h3>' +
@@ -236,6 +259,24 @@ function vistaInicio(main) {
   });
   h += "</div>";
   main.innerHTML = h;
+}
+
+function vistaInventario(main, sub) {
+  if (sub === "validacion") {
+    main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>' +
+      '<h2>Validación ciega de canales Outbound</h2><p>Esta herramienta se está construyendo por etapas.</p></div>' +
+      '<div class="tarjeta bloque-admin"><h3><span>Etapas</span></h3><table>' +
+      '<tr><td>1. Accesos: usuario y contraseña para asistentes, solo DNI para auxiliares</td><td><span class="estado ok">Listo</span></td></tr>' +
+      '<tr><td>2. Pantalla móvil del auxiliar: conteo ciego por paleta (HU, SKU, cantidad)</td><td><span class="estado pend">Siguiente</span></td></tr>' +
+      '<tr><td>3. Conexión con el Drive de Despacho (viajes, fases, canales)</td><td><span class="estado pend">Pendiente</span></td></tr>' +
+      '<tr><td>4. Cruce por código por viaje y descarga de un solo Excel</td><td><span class="estado pend">Pendiente</span></td></tr>' +
+      '<tr><td>5. Cruce por HU / picking</td><td><span class="estado pend">Pendiente</span></td></tr></table></div>';
+    return;
+  }
+  main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / Inventario</div>' +
+    '<h2>Inventario</h2><p>Elige una herramienta.</p></div><div class="grid">' +
+    '<a class="tarjeta modulo" href="#inventario/validacion"><div class="icono">✅</div><h3>VALIDACIÓN OUTBOUND</h3>' +
+    '<p>Validación ciega de canales de despacho, cruce por viaje y por HU.</p><div class="meta">En construcción</div><span class="abrir">Abrir →</span></a></div>';
 }
 
 function vistaReportes(main) {
@@ -331,86 +372,107 @@ function vistaAdmin(main) {
     h += "</table></div>";
   });
   main.innerHTML = h;
-  if (AUX === null) cargarAuxiliares();
+  if (AUX === null) cargarPersonas();
 }
 
-/* ================= AUXILIARES DE VALIDACIÓN (ingresan solo con DNI) ================= */
-const DNI_OK = /^[A-Za-z0-9]{6,15}$/;
+const DNI_OK = /^[a-z0-9]{6,15}$/;
 
-async function cargarAuxiliares() {
-  const { data, error } = await supabaseClient.from("val_auxiliares").select("*").order("nombre");
+/* ================= PERSONAS CON ACCESO (admin, asistentes y auxiliares) ================= */
+const ROLES = { admin: "Administradora", asistente: "Asistente", auxiliar: "Auxiliar (solo DNI)" };
+let perEditando = "";
+
+async function cargarPersonas() {
+  const { data, error } = await supabaseClient.from("val_usuarios")
+    .select("usuario,nombre,cargo,rol,activo").order("rol").order("nombre");
   AUX = error ? [] : data;
-  if (error) alert("No se pudo cargar la lista de auxiliares: " + error.message);
+  if (error) alert("No se pudo cargar la lista de personas: " + error.message);
   if (ruta()[0] === "admin") render();
 }
 
 function bloqueAuxiliares() {
-  let h = '<div class="tarjeta bloque-admin"><h3><span>👷 Auxiliares de validación (ingresan con su DNI)</span><span>' +
-          '<button class="btn gris" data-acc="aux-lote">Pegar lista</button> ' +
-          '<button class="btn" data-acc="aux-nuevo">+ Agregar auxiliar</button></span></h3>';
+  let h = '<div class="tarjeta bloque-admin"><h3><span>👥 Personas con acceso</span><span>' +
+          '<button class="btn gris" data-acc="aux-lote">Pegar lista de auxiliares</button> ' +
+          '<button class="btn" data-acc="aux-nuevo">+ Agregar persona</button></span></h3>';
   if (AUX === null) return h + '<p class="nota">Cargando…</p></div>';
-  h += '<p class="nota">Solo las personas de esta lista pueden entrar a validar. Si desactivas un DNI, pierde el acceso de inmediato.</p>' +
-       "<table><tr><th>DNI</th><th>Nombre</th><th>Estado</th><th></th></tr>";
+  h += '<p class="nota">Asistentes y administradoras entran con <b>usuario y contraseña</b>; los auxiliares de piso entran solo con su <b>DNI</b>. ' +
+       "Si desactivas a alguien, pierde el acceso de inmediato.</p>" +
+       "<table><tr><th>Usuario / DNI</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr>";
   AUX.forEach(a => {
-    const d = esc(a.dni);
-    h += "<tr><td>" + d + "</td><td>" + esc(a.nombre) + "</td><td>" +
+    const u = esc(a.usuario);
+    h += "<tr><td>" + u + "</td><td>" + esc(a.nombre) + (a.cargo ? '<br><span class="nota">' + esc(a.cargo) + "</span>" : "") + "</td><td>" + esc(ROLES[a.rol] || a.rol) + "</td><td>" +
          (a.activo ? '<span class="estado ok">Activo</span>' : '<span class="estado off">Desactivado</span>') + "</td>" +
-         '<td class="acc"><button class="btn" data-acc="aux-editar" data-dni="' + d + '">Editar</button>' +
-         '<button class="btn gris" data-acc="aux-toggle" data-dni="' + d + '">' + (a.activo ? "Desactivar" : "Activar") + "</button>" +
-         '<button class="btn peligro" data-acc="aux-borrar" data-dni="' + d + '">Quitar</button></td></tr>';
+         '<td class="acc"><button class="btn" data-acc="aux-editar" data-u="' + u + '">Editar</button>' +
+         '<button class="btn gris" data-acc="aux-toggle" data-u="' + u + '">' + (a.activo ? "Desactivar" : "Activar") + "</button>" +
+         '<button class="btn peligro" data-acc="aux-borrar" data-u="' + u + '">Quitar</button></td></tr>';
   });
-  if (!AUX.length) h += '<tr><td colspan="4" style="color:#6b7585">Aún no hay auxiliares registrados.</td></tr>';
+  if (!AUX.length) h += '<tr><td colspan="5" style="color:#6b7585">Aún no hay personas registradas.</td></tr>';
   return h + "</table></div>";
 }
 
 async function accionAux(a, ds) {
   if (!esAdmin()) return;
-  if (a === "aux-nuevo") return abrirModalAux("");
-  if (a === "aux-editar") return abrirModalAux(ds.dni);
+  if (a === "aux-nuevo") return abrirModalPersona("");
+  if (a === "aux-editar") return abrirModalPersona(ds.u);
   if (a === "aux-lote") { $("#lote-texto").value = ""; $("#modal-lote").classList.add("abierto"); return $("#lote-texto").focus(); }
-  if (a === "aux-cerrar") { $("#modal-aux").classList.remove("abierto"); $("#modal-lote").classList.remove("abierto"); auxEditando = ""; return; }
-  if (a === "aux-guardar") return guardarAux();
+  if (a === "aux-cerrar") { $("#modal-aux").classList.remove("abierto"); $("#modal-lote").classList.remove("abierto"); perEditando = ""; return; }
+  if (a === "aux-guardar") return guardarPersona();
   if (a === "aux-guardar-lote") return guardarLote();
-  const x = AUX && AUX.find(z => z.dni === ds.dni);
+  const x = AUX && AUX.find(z => z.usuario === ds.u);
   if (!x) return;
   if (a === "aux-toggle") {
-    const { error } = await supabaseClient.from("val_auxiliares").update({ activo: !x.activo }).eq("dni", x.dni);
-    if (error) return alert("No se pudo cambiar el estado: " + error.message);
-    toast(x.activo ? "Auxiliar desactivado" : "Auxiliar activado");
-    return cargarAuxiliares();
+    const { error } = await supabaseClient.rpc("val_usuario_estado", { p_usuario: x.usuario, p_activo: !x.activo });
+    if (error) return alert(error.message);
+    toast(x.activo ? "Persona desactivada" : "Persona activada");
+    return cargarPersonas();
   }
   if (a === "aux-borrar") {
-    if (!confirm("¿Quitar a " + x.nombre + " (" + x.dni + ") de la lista?\nSus validaciones anteriores se conservan.")) return;
-    const { error } = await supabaseClient.from("val_auxiliares").delete().eq("dni", x.dni);
-    if (error) return alert("No se pudo quitar: " + error.message);
-    toast("Auxiliar quitado");
-    return cargarAuxiliares();
+    if (!confirm("¿Quitar a " + x.nombre + " (" + x.usuario + ") de la lista?\nSus validaciones anteriores se conservan.")) return;
+    const { error } = await supabaseClient.rpc("val_usuario_borrar", { p_usuario: x.usuario });
+    if (error) return alert(error.message);
+    toast("Persona quitada");
+    return cargarPersonas();
   }
 }
 
-function abrirModalAux(dni) {
-  const x = dni ? AUX.find(z => z.dni === dni) : null;
-  auxEditando = x ? x.dni : "";
-  $("#modal-aux-titulo").textContent = x ? "Editar auxiliar" : "Nuevo auxiliar";
-  $("#aux-dni").value = x ? x.dni : ""; $("#aux-dni").disabled = !!x;
-  $("#aux-nombre").value = x ? x.nombre : "";
-  $("#modal-aux").classList.add("abierto");
-  (x ? $("#aux-nombre") : $("#aux-dni")).focus();
+function ajustarCamposPersona() {
+  const aux = $("#per-rol").value === "auxiliar";
+  $("#per-grupo-pass").style.display = aux ? "none" : "block";
+  $("#per-etq-usuario").textContent = aux ? "DNI (con esto ingresa)" : "Usuario (sin espacios)";
+  $("#per-usuario").placeholder = aux ? "Solo números o letras, sin espacios" : "Ej: mperez";
+  $("#per-pass").placeholder = perEditando ? "Déjala vacía para no cambiarla" : "Mínimo 8 caracteres";
 }
 
-async function guardarAux() {
-  const dni = $("#aux-dni").value.replace(/\s/g, "").toUpperCase();
-  const nombre = $("#aux-nombre").value.trim().replace(/\s+/g, " ").toUpperCase();
-  if (!DNI_OK.test(dni)) return alert("El DNI debe tener entre 6 y 15 letras o números, sin espacios.");
-  if (!nombre) return alert("Escribe el nombre del auxiliar.");
-  const q = auxEditando
-    ? supabaseClient.from("val_auxiliares").update({ nombre }).eq("dni", auxEditando)
-    : supabaseClient.from("val_auxiliares").insert({ dni, nombre });
-  const { error } = await q;
-  if (error) return alert(error.code === "23505" ? "Ese DNI ya está registrado." : "No se pudo guardar: " + error.message);
-  $("#modal-aux").classList.remove("abierto"); auxEditando = "";
-  toast("Auxiliar guardado ✔");
-  cargarAuxiliares();
+function abrirModalPersona(usuario) {
+  const x = usuario ? AUX.find(z => z.usuario === usuario) : null;
+  perEditando = x ? x.usuario : "";
+  $("#modal-aux-titulo").textContent = x ? "Editar persona" : "Nueva persona";
+  $("#per-usuario").value = x ? x.usuario : ""; $("#per-usuario").disabled = !!x;
+  $("#per-nombre").value = x ? x.nombre : "";
+  $("#per-cargo").value = x && x.cargo ? x.cargo : "";
+  $("#per-rol").value = x ? x.rol : "auxiliar";
+  $("#per-pass").value = "";
+  ajustarCamposPersona();
+  $("#modal-aux").classList.add("abierto");
+  (x ? $("#per-nombre") : $("#per-usuario")).focus();
+}
+document.addEventListener("change", e => { if (e.target && e.target.id === "per-rol") ajustarCamposPersona(); });
+
+async function guardarPersona() {
+  const rol = $("#per-rol").value;
+  const usuario = $("#per-usuario").value.replace(/\s/g, "").toLowerCase();
+  let nombre = $("#per-nombre").value.trim().replace(/\s+/g, " ");
+  const cargo = $("#per-cargo").value.trim();
+  const pass = $("#per-pass").value;
+  if (!usuario) return alert("Escribe el usuario (o el DNI).");
+  if (!nombre) return alert("Escribe el nombre.");
+  if (rol === "auxiliar") nombre = nombre.toUpperCase();
+  const { error } = await supabaseClient.rpc("val_usuario_guardar", {
+    p_usuario: usuario, p_nombre: nombre, p_cargo: cargo, p_rol: rol, p_password: rol === "auxiliar" ? null : (pass || null)
+  });
+  if (error) return alert(error.message);
+  $("#modal-aux").classList.remove("abierto"); perEditando = "";
+  toast("Guardado ✔");
+  cargarPersonas();
 }
 
 // Pegar varias filas desde Excel: DNI  [tab o ; o ,]  NOMBRE
@@ -418,16 +480,17 @@ async function guardarLote() {
   const filas = [], malas = [], vistos = new Set();
   $("#lote-texto").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(l => {
     const c = l.split(/[;,\t]+/).map(x => x.trim());
-    const dni = (c[0] || "").replace(/\s/g, "").toUpperCase(), nombre = c.slice(1).join(" ").replace(/\s+/g, " ").trim().toUpperCase();
+    const dni = (c[0] || "").replace(/\s/g, "").toLowerCase(), nombre = c.slice(1).join(" ").replace(/\s+/g, " ").trim().toUpperCase();
     if (DNI_OK.test(dni) && nombre && !vistos.has(dni)) { vistos.add(dni); filas.push({ dni, nombre }); } else malas.push(l);
   });
   if (!filas.length) return alert("No encontré filas válidas. Cada línea debe ser: DNI, un separador (tab, ; o ,) y el nombre.");
-  const { error } = await supabaseClient.from("val_auxiliares").upsert(filas, { onConflict: "dni" });
+  const { data, error } = await supabaseClient.rpc("val_auxiliares_lote", { p_filas: filas });
   if (error) return alert("No se pudo guardar la lista: " + error.message);
   $("#modal-lote").classList.remove("abierto");
-  toast(filas.length + " auxiliar(es) guardado(s) ✔");
-  if (malas.length) alert("Estas " + malas.length + " línea(s) no se guardaron por tener datos incompletos:\n\n" + malas.slice(0, 8).join("\n") + (malas.length > 8 ? "\n…" : ""));
-  cargarAuxiliares();
+  toast((data ? data.guardados : filas.length) + " auxiliar(es) guardado(s) ✔");
+  const extra = malas.concat(data && data.omitidos ? data.omitidos : []);
+  if (extra.length) alert("Estas " + extra.length + " línea(s) no se guardaron:\n\n" + extra.slice(0, 8).join("\n") + (extra.length > 8 ? "\n…" : ""));
+  cargarPersonas();
 }
 
 function abrirModal(modId, dashId) {
@@ -496,11 +559,6 @@ async function guardarModal() {
 }
 
 window.addEventListener("hashchange", render);
-
-// Si la sesión se cierra (vence o se cierra en otra pestaña), volver al login
-supabaseClient.auth.onAuthStateChange(evento => {
-  if (evento === "SIGNED_OUT" && usuarioActual) { usuarioActual = null; AUX = null; verificarEstadoSesion(); }
-});
 
 // Inicializar al cargar la página
 (async function iniciar() {
