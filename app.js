@@ -26,7 +26,7 @@ let usuarioActual = null;
 
 const $ = s => document.querySelector(s);
 
-// ================= PÁGINA DE LOGIN =================
+// ================= GESTIÓN DE LOGIN Y SESIÓN =================
 document.addEventListener("submit", async e => {
   if (!e.target || e.target.id !== "form-login") return;
   e.preventDefault();
@@ -48,17 +48,13 @@ document.addEventListener("submit", async e => {
   }
 
   try {
-    console.log("Intentando iniciar sesión con usuario:", usuario);
-    
     const { data, error } = await supabaseClient.rpc("val_entrar", { 
       p_usuario: usuario, 
       p_password: pass || null 
     });
 
-    console.log("Respuesta de Supabase:", data, error);
-
     if (error) throw new Error("Error en Supabase: " + error.message);
-    if (!data || !data.ok) throw new Error((data && data.msg) || "Usuario o contraseña incorrectos en la base de datos.");
+    if (!data || !data.ok) throw new Error((data && data.msg) || "Usuario o contraseña incorrectos.");
     
     fijarToken(data.token);
     usuarioActual = { usuario: data.usuario, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
@@ -68,7 +64,6 @@ document.addEventListener("submit", async e => {
     
     verificarEstadoSesion();
   } catch (ex) {
-    console.error("Falla en login:", ex);
     if (errDiv) { 
       errDiv.textContent = ex.message; 
       errDiv.style.display = "block"; 
@@ -83,6 +78,15 @@ document.addEventListener("submit", async e => {
   }
 });
 
+// Botón de cerrar sesión
+document.addEventListener("click", e => {
+  if (e.target && e.target.id === "btn-cerrar-sesion") {
+    fijarToken(null);
+    usuarioActual = null;
+    verificarEstadoSesion();
+  }
+});
+
 function verificarEstadoSesion() {
   const vistaLogin = $("#vista-login");
   const contenedorPrincipal = $("#contenedor-principal");
@@ -90,10 +94,17 @@ function verificarEstadoSesion() {
   if (usuarioActual) {
     if (vistaLogin) vistaLogin.style.display = "none";
     if (contenedorPrincipal) contenedorPrincipal.style.display = "flex";
+    
     const nombreDisplay = $("#nombre-usuario-display");
     const cargoDisplay = $("#cargo-usuario-display");
+    const rolDisplay = $("#etiqueta-rol");
+    
     if (nombreDisplay) nombreDisplay.textContent = usuarioActual.nombre;
     if (cargoDisplay) cargoDisplay.textContent = usuarioActual.cargo;
+    if (rolDisplay) rolDisplay.textContent = usuarioActual.rol.toUpperCase();
+
+    // Renderizamos el menú y la vista principal de la app
+    renderizarMenuYContenido();
   } else {
     if (vistaLogin) vistaLogin.style.display = "flex";
     if (contenedorPrincipal) contenedorPrincipal.style.display = "none";
@@ -117,29 +128,54 @@ async function cargarPerfil() {
   verificarEstadoSesion();
 })();
 
-// ================= GESTIÓN DE EXCEL Y LOGS =================
+// ================= RENDERIZADO DE MENÚ Y MÓDULOS =================
+function renderizarMenuYContenido() {
+    const menu = $("#menu");
+    if (menu) {
+        menu.innerHTML = `
+            <div class="titulo-seccion">MÓDULOS OPERATIVOS</div>
+            <a href="#" class="activo" onclick="mostrarVistaExcel(); return false;">📊 Validación Outbound</a>
+        `;
+    }
+    mostrarVistaExcel();
+}
 
-// Función auxiliar para registrar mensajes en pantalla y consola
+function mostrarVistaExcel() {
+    const principal = $("#principal");
+    if (!principal) return;
+
+    principal.innerHTML = `
+        <div class="tarjeta encabezado">
+            <h2>Validación Outbound & Control de Fases</h2>
+            <p>Carga tu archivo Excel para procesar dinámicamente las columnas de FO y Fase.</p>
+        </div>
+        <div class="tarjeta bloque-admin">
+            <h3>Seleccionar Archivo de Despachos</h3>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <input type="file" id="inputExcel" accept=".xlsx, .xls, .csv" style="width:100%; padding:12px; border:1px solid #c3cbd9; border-radius:8px;">
+            </div>
+            <h3>Consola de Registro</h3>
+            <div id="log" style="background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; height: 220px; overflow-y: auto;">Esperando archivo Excel...</div>
+        </div>
+    `;
+
+    // Vinculamos el evento al nuevo input generado dinámicamente
+    const inputExcel = document.getElementById('inputExcel');
+    if (inputExcel) {
+        inputExcel.addEventListener('change', procesarExcelDinamico);
+    }
+}
+
+// ================= GESTIÓN Y PROCESAMIENTO DINÁMICO DE EXCEL =================
 function registrarLog(mensaje, esError = false) {
     const logDiv = document.getElementById('log');
-    if (!logDiv) return; // Si no está presente en la vista actual, solo imprime en consola
+    if (!logDiv) return;
     const color = esError ? '#ff6b6b' : '#00ff00';
     logDiv.innerHTML += `<div style="color: ${color};">[${new Date().toLocaleTimeString()}] ${mensaje}</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
     console.log(mensaje);
 }
 
-// Escuchar cuando el usuario seleccione un archivo Excel
-document.addEventListener('DOMContentLoaded', () => {
-    const inputExcel = document.getElementById('inputExcel');
-    if (inputExcel) {
-        inputExcel.addEventListener('change', procesarExcelDinamico);
-    }
-});
-
-/**
- * Procesa el archivo Excel de manera dinámica buscando las columnas por sus encabezados (FO, Fase, etc.)
- */
 function procesarExcelDinamico(e) {
     const archivo = e.target.files[0];
     if (!archivo) return;
@@ -152,11 +188,9 @@ function procesarExcelDinamico(e) {
             const datos = new Uint8Array(evento.target.result);
             const libro = XLSX.read(datos, { type: 'array' });
             
-            // Tomamos la primera hoja del libro de Excel
             const nombreHoja = libro.SheetNames[0];
             const hoja = libro.Sheets[nombreHoja];
             
-            // Convertimos la hoja a JSON usando la primera fila como cabecera (encabezados)
             const filasJson = XLSX.utils.sheet_to_json(hoja, { defval: "" });
 
             if (filasJson.length === 0) {
@@ -166,35 +200,31 @@ function procesarExcelDinamico(e) {
 
             registrarLog(`Total de filas leídas: ${filasJson.length}`);
 
-            // Identificamos las columnas de forma dinámica buscando coincidencias en los encabezados
             const primeraFila = filasJson[0];
             const llaves = Object.keys(primeraFila);
 
-            // Búsqueda inteligente e insensible a mayúsculas/minúsculas de FO y Fase
             const colFO = llaves.find(k => k.trim().toUpperCase() === 'FO' || k.trim().toUpperCase() === 'FO REAL' || k.trim().toUpperCase().includes('FO'));
             const colFase = llaves.find(k => k.trim().toUpperCase() === 'FASE' || k.trim().toUpperCase().includes('FASE'));
 
             if (!colFO || !colFase) {
                 registrarLog("ERROR: No se detectaron automáticamente las columnas 'FO' y 'Fase' en los encabezados.", true);
-                registrarLog(`Encabezados encontrados en tu Excel: [ ${llaves.join(', ')} ]`, true);
+                registrarLog(`Encabezados encontrados: [ ${llaves.join(', ')} ]`, true);
                 return;
             }
 
             registrarLog(`¡Columnas detectadas con éxito! -> FO: [${colFO}] | Fase: [${colFase}]`);
 
-            // Procesamos cada registro de manera limpia
             const resultadosProcesados = filasJson.map((fila, index) => {
                 return {
-                    fila: index + 2, // Fila real en el Excel (contando cabecera)
+                    fila: index + 2,
                     fo: fila[colFO],
                     fase: fila[colFase]
                 };
-            }).filter(item => item.fo !== "" || item.fase !== ""); // Filtramos filas vacías
+            }).filter(item => item.fo !== "" || item.fase !== "");
 
             registrarLog(`Procesamiento exitoso. Se validaron ${resultadosProcesados.length} registros.`);
-            console.table(resultadosProcesados.slice(0, 5)); // Muestra una muestra en la consola F12
+            console.table(resultadosProcesados.slice(0, 5));
 
-            // Aquí puedes conectar el envío hacia tu backend o la lógica de almacenamiento
             enviarDatosAlServidor(resultadosProcesados);
 
         } catch (error) {
@@ -206,5 +236,5 @@ function procesarExcelDinamico(e) {
 }
 
 function enviarDatosAlServidor(datos) {
-    registrarLog("Datos listos para sincronizar con la lógica de operaciones o Drive.");
+    registrarLog("Datos listos para sincronizar con la lógica de operaciones.");
 }
