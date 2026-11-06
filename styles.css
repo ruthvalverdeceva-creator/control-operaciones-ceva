@@ -171,3 +171,12 @@ td.acc .btn { margin-left: 6px; padding: 6px 12px; }
   .sidebar { position: static; width: 100%; }
   .contenido { margin-left: 0; width: 100%; }
 }
+/* ================= AGREGADOS: auxiliares y ventanas nuevas ================= */
+.estado.off { background: #eceff4; color: #5b6676; }
+.nota { color: var(--gris); font-size: 13px; margin: -4px 0 12px; line-height: 1.5; }
+.bloque-admin h3 > span:last-child { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.modal textarea { width: 100%; min-height: 160px; padding: 12px; border: 1px solid #c3cbd9; border-radius: 8px; font-size: 14px; font-family: Consolas, monospace; resize: vertical; }
+.modal input:disabled { background: #eef1f6; color: var(--gris); }
+.btn:disabled { opacity: .6; cursor: wait; }
+.login-nota { margin-top: 22px; font-size: 13px; color: var(--gris); }
+.login-nota a { color: var(--azul-medio); font-weight: 700; text-decoration: none; }
