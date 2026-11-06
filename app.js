@@ -623,4 +623,4 @@ async function procesarArchivoExcelSubido() {
     };
     lector.readAsArrayBuffer(archivo);
 }
-}
+
