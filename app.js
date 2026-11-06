@@ -571,19 +571,65 @@ window.addEventListener("hashchange", render);
   verificarEstadoSesion();
 })();
 
-// Pantalla Móvil del Auxiliar - Conteo Ciego por Paleta (Etapa 2)
+// Pantalla Principal de Validación Outbound: Listado de Viajes y Conteo
 function renderVistaValidacionOutbound(main) {
-    main.innerHTML = `
+    const viajesPendientes = [
+        { fo: "FO-89321", fase: "01", cliente: "ALICORP S.A.A.", transportista: "LOGISTICA ANDINA", estado: "PENDIENTE" },
+        { fo: "FO-89322", fase: "02", cliente: "UNILEVER ANDINA", transportista: "TGA TRANSPORTES", estado: "EN PROCESO" },
+        { fo: "FO-89323", fase: "01", cliente: "NESTLE PERU", transportista: "TRANS. RAPIDO", estado: "PENDIENTE" }
+    ];
+
+    let htmlViajes = `
         <div class="tarjeta encabezado">
             <div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>
             <h2>Validación ciega de canales Outbound</h2>
-            <p>Módulo operativo para el registro y conteo de datos en piso (Etapa 2 Activa).</p>
+            <p>Seleccione el viaje (FO) y fase correspondiente para iniciar el control operativo en piso.</p>
+        </div>
+
+        <div class="tarjeta" style="max-width: 800px; margin: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin:0; color:#0f2150;">VIAJES PENDIENTES DE DESPACHO</h3>
+                <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:8px 14px; border-radius:6px; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body)">🔄 ACTUALIZAR</button>
+            </div>
+            <div style="display: grid; gap: 10px;">
+    `;
+
+    viajesPendientes.forEach((v) => {
+        let badgeColor = v.estado === "EN PROCESO" ? "#fff3cd" : "#e0e0e0";
+        let textColor = v.estado === "EN PROCESO" ? "#856404" : "#666";
+        
+        htmlViajes += `
+            <div style="border: 1px solid #ddd; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background: #fff;">
+                <div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <strong style="font-size:16px; color:#0f2150;">FO: ${v.fo}</strong>
+                        <span style="background:${badgeColor}; color:${textColor}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">${v.estado}</span>
+                    </div>
+                    <p style="margin:4px 0 0 0; font-size:13px; color:#555;"><b>Fase:</b> ${v.fase} | <b>Cliente:</b> ${v.cliente} | <b>Transp:</b> ${v.transportista}</p>
+                </div>
+                <button class="btn" style="background:#e30a17; color:#fff; border:0; padding:8px 14px; border-radius:6px; font-weight:700; cursor:pointer;" onclick="abrirPantallaConteo('${v.fo}', '${v.fase}', '${v.cliente}')">VALIDAR VIAJE</button>
+            </div>
+        `;
+    });
+
+    htmlViajes += `</div></div>`;
+    main.innerHTML = htmlViajes;
+}
+
+// Pantalla de Conteo Ciego al hacer clic en un viaje
+function abrirPantallaConteo(fo, fase, cliente) {
+    const main = document.querySelector('main') || document.getElementById('main') || document.body;
+    main.innerHTML = `
+        <div class="tarjeta encabezado">
+            <div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / <a href="#inventario/validacion">Validación Outbound</a> / ${fo}</div>
+            <h2>Auditoría de Paleta - FO: ${fo} (Fase ${fase})</h2>
+            <p><b>Cliente:</b> ${cliente}</p>
         </div>
 
         <div class="tarjeta bloque-admin" style="max-width: 500px; margin: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <span class="tag" id="lblPaletaT" style="background:#0f2150; color:#fff; padding:6px 12px; border-radius:8px; font-weight:700;">PALETA 1</span>
-                <button class="btn r sm" style="background:#e30a17; color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer;" onclick="alert('Auditoría finalizada de prueba')">FINALIZAR AUDITORÍA</button>
+                <button class="btn r sm" style="background:#6c757d; color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body)">⬅ VOLVER A VIAJES</button>
             </div>
 
             <div style="margin-bottom: 10px;">
