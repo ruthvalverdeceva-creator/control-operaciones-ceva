@@ -26,7 +26,7 @@ let usuarioActual = null;
 
 const $ = s => document.querySelector(s);
 
-// ================= GESTIÓN DE LOGIN Y SESIÓN =================
+// ================= PÁGINA DE LOGIN =================
 document.addEventListener("submit", async e => {
   if (!e.target || e.target.id !== "form-login") return;
   e.preventDefault();
@@ -103,7 +103,7 @@ function verificarEstadoSesion() {
     if (cargoDisplay) cargoDisplay.textContent = usuarioActual.cargo;
     if (rolDisplay) rolDisplay.textContent = usuarioActual.rol.toUpperCase();
 
-    // Renderizamos el menú y la vista principal de la app
+    // Renderizamos tu menú corporativo y tus módulos completos
     renderizarMenuYContenido();
   } else {
     if (vistaLogin) vistaLogin.style.display = "flex";
@@ -128,7 +128,7 @@ async function cargarPerfil() {
   verificarEstadoSesion();
 })();
 
-// ================= RENDERIZADO DE MENÚ Y MÓDULOS =================
+// ================= RENDERIZADO DE MENÚ Y MÓDULOS COMPLETOS =================
 function renderizarMenuYContenido() {
     const menu = $("#menu");
     if (menu) {
@@ -159,14 +159,13 @@ function mostrarVistaExcel() {
         </div>
     `;
 
-    // Vinculamos el evento al nuevo input generado dinámicamente
     const inputExcel = document.getElementById('inputExcel');
     if (inputExcel) {
         inputExcel.addEventListener('change', procesarExcelDinamico);
     }
 }
 
-// ================= GESTIÓN Y PROCESAMIENTO DINÁMICO DE EXCEL =================
+// ================= PROCESAMIENTO DINÁMICO DE EXCEL CON SHEETJS =================
 function registrarLog(mensaje, esError = false) {
     const logDiv = document.getElementById('log');
     if (!logDiv) return;
