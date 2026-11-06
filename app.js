@@ -553,140 +553,20 @@ window.addEventListener("hashchange", render);
 })();
 
 // ==========================================================================
-// MÓDULO DE VALIDACIÓN OUTBOUND - SUBIDA DE ARCHIVOS EXCEL Y SINCRONIZACIÓN
+// PROCESAR Y SUBIR ARCHIVO EXCEL DE PICKING (ACTUALIZAR Y AGREGAR INTELIGENTE)
 // ==========================================================================
 
-async function renderVistaValidacionOutbound(main) {
-    main.innerHTML = `
-        <div class="tarjeta encabezado" style="background:#0f2150; color:#fff; border-radius:12px; padding:20px; margin-bottom:20px;">
-            <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / <a href="#inventario" style="color:#adb5bd;">Inventario</a> / Validación Outbound</div>
-            <h2 style="color:#fff; margin:10px 0 5px 0;">CONTROL OPERATIVO OUTBOUND</h2>
-            <p style="margin:0; font-size:13px; color:#e0e0e0;">Sincronizando viajes desde el Drive de Despachos y Supabase...</p>
-        </div>
-        <div class="tarjeta" style="text-align:center; padding:30px;">
-            <p style="font-weight:700; color:#0f2150;">Cargando información en vivo...</p>
-        </div>
-    `;
-
-    try {
-        const { data: registros, error } = await supabaseClient
-            .from('val_fases')
-            .select('*');
-
-        if (error) throw error;
-        const listaRegistros = registros || [];
-
-        main.innerHTML = `
-            <div class="tarjeta encabezado" style="background:#0f2150; color:#fff; border-radius:12px; padding:20px; margin-bottom:20px;">
-                <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / <a href="#inventario" style="color:#adb5bd;">Inventario</a> / Validación Outbound</div>
-                <h2 style="color:#fff; margin:10px 0 5px 0;">CONTROL OPERATIVO OUTBOUND</h2>
-                <p style="margin:0; font-size:13px; color:#e0e0e0;">Panel de control y validación ciega de canales de despacho por FO y fases.</p>
-            </div>
-
-            <!-- Panel de Carga Directa de Archivos Excel / SAP -->
-            <div class="tarjeta" style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:20px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
-                <h3 style="color:#0f2150; margin-top:0; font-size:16px;">📂 Subir archivo Excel operativo (Picking / Stock / Status)</h3>
-                
-                <div style="margin-bottom: 12px;">
-                    <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Tipo de documento:</label>
-                    <select id="tipoDocumentoArchivo" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
-                        <option value="picking">PICKING (reemplaza solo las fases del archivo)</option>
-                        <option value="stock">STOCK ENTREGAS (reemplaza toda la hoja)</option>
-                        <option value="monitor">MONITOR / STATUS (reemplaza la hoja)</option>
-                    </select>
-                </div>
-
-                <div style="margin-bottom: 15px;">
-                    <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Seleccionar archivo Excel (.xlsx / .csv):</label>
-                    <input type="file" id="inputArchivoExcel" accept=".xlsx, .xls, .csv" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; background:#fafafa;">
-                </div>
-
-                <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; cursor:pointer;" onclick="procesarArchivoExcelSubido()">🚀 PROCESAR Y SUBIR ARCHIVO A SUPABASE</button>
-            </div>
-
-            <!-- Botonera superior de Sincronización Web -->
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main'))">🔄 ACTUALIZAR</button>
-                <button class="btn" style="background:#198754; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="sincronizarDriveDespachosWeb()">📥 SINCRONIZAR DRIVE DE DESPACHOS</button>
-            </div>
-
-            <!-- Filtro de Total Fases -->
-            <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
-                <span style="background:#0f2150; color:#fff; padding:8px 14px; border-radius:20px; font-size:12px; font-weight:700;">TOTAL FASES (${listaRegistros.length})</span>
-            </div>
-
-            <!-- Contenedor de Tarjetas de Viajes (FOs) -->
-            <div id="contenedorTarjetasFO" style="display: grid; gap: 15px;">
-                ${generarTarjetasHTML(listaRegistros)}
-            </div>
-        `;
-
-    } catch (err) {
-        console.error("Error al conectar con Supabase:", err);
-        main.innerHTML = `
-            <div class="tarjeta encabezado">
-                <h2>Validación ciega de canales Outbound</h2>
-                <p style="color:red; font-weight:700;">Error al conectar con Supabase: ${err.message}</p>
-            </div>
-        `;
-    }
-}
-
-// Generador de tarjetas operativas
-function generarTarjetasHTML(registros) {
-    if (registros.length === 0) {
-        return `
-            <div class="tarjeta" style="text-align:center; padding:25px; background:#fff; border-radius:10px; border:1px solid #ddd;">
-                <h3 style="color:#0f2150; margin-bottom:8px;">No hay fases cargadas actualmente</h3>
-                <p style="color:#666; font-size:13px; margin-bottom:15px;">Selecciona tu archivo Excel arriba o haz clic en <b>"Sincronizar Drive de Despachos"</b>.</p>
-            </div>
-        `;
-    }
-
-    let html = "";
-    registros.forEach((v) => {
-        let fo = v.fo || "FO-S/N";
-        let fase = v.fase || "01";
-        let cliente = v.cliente || "CLIENTE GENERAL";
-        let validador = v.validador || "RUTHVAL";
-        let estado = v.estadoApp || "EN PROCESO";
-        let colorBarra = estado === "CERRADO" ? "#198754" : "#0d6efd";
-
-        html += `
-            <div style="background:#fff; border:1px solid #ddd; border-radius:10px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
-                <div style="background:${colorBarra}; color:#fff; padding:10px 15px; display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:16px;">FO: ${fo}</strong>
-                </div>
-                
-                <div style="padding:15px;">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
-                        <div>
-                            <div style="font-size:15px; font-weight:700; color:#0f2150;">FASE: ${fase} - ${cliente}</div>
-                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>VALIDADOR:</b> ${validador}</div>
-                        </div>
-                        <span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700; border:1px solid #ffeeba;">${estado}</span>
-                    </div>
-
-                    <div style="display:flex; gap:8px; margin-top:12px; border-top:1px solid #eee; padding-top:10px; flex-wrap:wrap;">
-                        <button class="btn sm" style="background:#0f2150; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="ejecutarCruceHU('${fo}', '${fase}')">⚡ Cruce HU / Paletas</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    return html;
-}
-
-// Procesar el archivo Excel subido por el usuario
 async function procesarArchivoExcelSubido() {
     const inputArchivo = document.getElementById('inputArchivoExcel');
+    const tipoDoc = document.getElementById('tipoDocumentoArchivo').value;
+
     if (!inputArchivo || !inputArchivo.files || inputArchivo.files.length === 0) {
         alert("Por favor, selecciona primero un archivo Excel (.xlsx o .csv).");
         return;
     }
 
     const archivo = inputArchivo.files[0];
-    alert(`Leyendo y procesando el archivo: ${archivo.name}...`);
+    alert(`Leyendo y procesando el archivo de [${tipoDoc.toUpperCase()}] para actualizar estatus y agregar nuevos...`);
 
     const lector = new FileReader();
     lector.onload = async function(e) {
@@ -705,19 +585,23 @@ async function procesarArchivoExcelSubido() {
                 const fila = filasJson[i];
                 if (!fila || fila.length === 0) continue;
 
-                // Buscamos columnas comunes de FO y Fase en la fila
+                // Extraemos los campos adaptados de tu estructura de Picking/Status
                 let foVal = String(fila[4] || fila[0] || "").trim();
                 let faseVal = String(fila[5] || fila[1] || "").trim();
                 let clienteVal = String(fila[6] || fila[2] || "").trim() || "CLIENTE L400";
+                
+                // Si el archivo trae indicadores de estatus o avance, los leemos para actualizar el cambio
+                let estadoVal = String(fila[10] || "").trim().toUpperCase();
+                let estatusActualizado = (estadoVal.includes("CONFIRM") || estadoVal.includes("CERRAD")) ? "CERRADO" : "EN PROCESO";
 
                 if (foVal && foVal.length >= 6) {
                     registrosUpsert.push({
-                        id: foVal,
+                        id: foVal,          // Clave única para saber si ya existe o es nuevo
                         fo: foVal,
                         fase: faseVal || "01",
                         cliente: clienteVal.toUpperCase(),
-                        validador: "RUTHVAL",
-                        estadoApp: "EN PROCESO"
+                        estadoApp: estatusActualizado, // Actualiza el estatus si cambió en el Excel
+                        validador: "RUTHVAL"
                     });
                     procesados++;
                 }
@@ -727,13 +611,14 @@ async function procesarArchivoExcelSubido() {
                 throw new Error("No se encontraron columnas válidas de FO/Fase en el archivo seleccionado.");
             }
 
+            // UPSERT INTELIGENTE: Actualiza lo existente (si cambió de estatus) e inserta lo nuevo
             const { error: errorSinc } = await supabaseClient
                 .from('val_fases')
                 .upsert(registrosUpsert, { onConflict: 'id' });
 
             if (errorSinc) throw errorSinc;
 
-            alert(`¡Archivo procesado con éxito! Se cargaron ${procesados} registros a Supabase.`);
+            alert(`¡Sincronización exitosa! Se actualizaron estatus y se agregaron registros nuevos (${procesados} en total).`);
             renderVistaValidacionOutbound(document.querySelector('main'));
 
         } catch (err) {
@@ -742,72 +627,4 @@ async function procesarArchivoExcelSubido() {
         }
     };
     lector.readAsArrayBuffer(archivo);
-}
-
-// Sincronización Web Directa desde Google Sheets
-async function sincronizarDriveDespachosWeb() {
-    alert("Sincronizando datos desde el Drive de Despachos en línea...");
-    
-    try {
-        const urlExport = `https://docs.google.com/spreadsheets/d/${ID_GOOGLE_SHEET_DESPACHOS}/export?format=csv`;
-        const res = await fetch(urlExport);
-        
-        if (!res.ok) throw new Error("No se pudo conectar con el Google Sheet.");
-
-        const csvText = await res.text();
-        const lineas = csvText.split("\n");
-        const registrosUpsert = [];
-
-        for (let i = 1; i < lineas.length; i++) {
-            const columnas = lineas[i].split(",");
-            if (!columnas || columnas.length < 6) continue;
-
-            let foVal = (columnas[4] || "").replace(/"/g, '').trim();
-            let faseVal = (columnas[5] || "").replace(/"/g, '').trim();
-            let clienteVal = (columnas[6] || "").replace(/"/g, '').trim() || "CLIENTE L400";
-
-            if (foVal && foVal.length >= 6) {
-                registrosUpsert.push({
-                    id: foVal,
-                    fo: foVal,
-                    fase: faseVal || "01",
-                    cliente: clienteVal.toUpperCase(),
-                    validador: "RUTHVAL",
-                    estadoApp: "EN PROCESO"
-                });
-            }
-        }
-
-        const { error: errorSinc } = await supabaseClient
-            .from('val_fases')
-            .upsert(registrosUpsert, { onConflict: 'id' });
-
-        if (errorSinc) throw errorSinc;
-
-        alert("¡Sincronización web completada con éxito!");
-        renderVistaValidacionOutbound(document.querySelector('main'));
-
-    } catch (err) {
-        console.error("Error en sincronización web:", err);
-        alert("Error: " + err.message);
-    }
-}
-
-// Lógica de cruce por HU y Paletas
-async function ejecutarCruceHU(fo, fase) {
-    alert(`Ejecutando cruce automático por HU y paletas para la FO: ${fo} (Fase ${fase})...`);
-    
-    try {
-        const { data: datosPicking, error } = await supabaseClient
-            .from('val_picking')
-            .select('*')
-            .eq('fo', fo);
-
-        if (error) throw error;
-        alert(`¡Cruce verificado con éxito para la FO ${fo}!`);
-
-    } catch (err) {
-        console.error("Error en el cruce:", err);
-        alert(`Error en la validación: ${err.message}`);
-    }
 }
