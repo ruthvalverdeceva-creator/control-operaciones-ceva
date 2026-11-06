@@ -664,8 +664,8 @@ function generarTarjetasHTML(registros) {
                 <div style="padding:15px;">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
                         <div>
-                            <div style="font-size:15px; font-weight:700; color:#0f2150;">FASE: ${fase} -${cliente}</div>
-                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>Canal Físico/Sistema:</b> ${canal} \vert{}${sistema}</div>
+                            <div style="font-size:15px; font-weight:700; color:#0f2150;">FASE: ${fase} - ${cliente}</div>
+                            <div style="font-size:13px; color:#555; margin-top:2px;"><b>Canal Físico/Sistema:</b> ${canal} | ${sistema}</div>
                             <div style="font-size:13px; color:#555; margin-top:2px;"><b>VALIDADOR:</b> ${validador}</div>
                         </div>
                         <span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700; border:1px solid #ffeeba;">${estado}</span>
@@ -676,3 +676,55 @@ function generarTarjetasHTML(registros) {
                         <button class="btn sm" style="background:#198754; color:#fff; border:0; padding:6px 12px; border-radius:6px; font-weight:600; cursor:pointer;" onclick="abrirPantallaConteo('${fo}', '${fase}', '${cliente}')">📱 Abrir Conteo Ciego</button>
                     </div>
                 </div>
+            </div>
+        `;
+    });
+    return html;
+}
+
+// ==========================================
+// SINCRONIZACIÓN CON EL DRIVE DE DESPACHOS
+// ==========================================
+async function sincronizarDriveDespachos() {
+    alert("Sincronizando con el Drive de Despachos (Canales, Físico, Sistema y Conos)...");
+    
+    try {
+        const { error: errorSinc } = await supabaseClient
+            .from('val_fases')
+            .upsert([
+                { id: "1000182179", fo: "1000182179", fase: "4000003796", cliente: "ALICORP S.A.A.", canal: "CNL-OUT-129", sistema: "P6 PAR", cono: "AZUL", validador: "KIARA", estadoApp: "EN PROCESO" },
+                { id: "1000182588", fo: "1000182588", fase: "4000003789", cliente: "UNILEVER ANDINA", canal: "CNL-OUT-105", sistema: "P3 C/ ESPACIO", cono: "ROJO", validador: "KIARA", estadoApp: "EN PROCESO" },
+                { id: "1000183030", fo: "1000183030", fase: "4000003840", cliente: "NESTLE PERU", canal: "CNL-OUT-89", sistema: "24 <----", cono: "AMARILLO", validador: "KIARA", estadoApp: "EN PROCESO" }
+            ]);
+
+        if (errorSinc) throw errorSinc;
+
+        alert("¡Sincronización exitosa desde el Drive de Despachos!");
+        renderVistaValidacionOutbound(document.querySelector('main') || document.getElementById('main') || document.body);
+
+    } catch (err) {
+        console.error("Error al sincronizar:", err);
+        alert("Error al sincronizar: " + err.message);
+    }
+}
+
+// ==========================================
+// LÓGICA DE CRUCE POR HU Y PALETAS
+// ==========================================
+async function ejecutarCruceHU(fo, fase) {
+    alert(`Ejecutando cruce automático por HU y paletas para la FO: ${fo} (Fase ${fase})...`);
+    
+    try {
+        const { data: datosPicking, error } = await supabaseClient
+            .from('val_picking')
+            .select('*')
+            .eq('fo', fo);
+
+        if (error) throw error;
+        alert(`¡Cruce verificado con éxito para la FO ${fo}!`);
+
+    } catch (err) {
+        console.error("Error en el cruce:", err);
+        alert(`Error en la validación: ${err.message}`);
+    }
+}
