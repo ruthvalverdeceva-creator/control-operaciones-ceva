@@ -16,14 +16,14 @@
   <div class="tarjeta-login">
     <h2>CONTROL DE<br>OPERACIONES</h2>
     <div class="sub-login">LATAM 400</div>
-    <div class="error-login" id="error-login">Correo o contraseña incorrectos.</div>
+    <div class="error-login" id="error-login">Usuario o contraseña incorrectos.</div>
     <form id="form-login">
-      <label>Correo</label>
-      <input type="email" id="login-correo" placeholder="nombre@empresa.com" required autocomplete="username">
+      <label>Usuario o DNI</label>
+      <input type="text" id="login-usuario" placeholder="Ej: mperez  (auxiliares: su DNI)" required autocomplete="username" autocapitalize="none" spellcheck="false">
 
       <div class="grupo-password">
         <label>Contraseña</label>
-        <input type="password" id="login-password" placeholder="Ingrese contraseña" required autocomplete="current-password">
+        <input type="password" id="login-password" placeholder="Auxiliares: dejar vacía" autocomplete="current-password">
         <button type="button" class="btn-ver" id="btn-toggle-password" title="Mostrar/Ocultar contraseña">👁️</button>
       </div>
 
@@ -84,14 +84,26 @@
   </div>
 </div>
 
-<!-- VENTANA EMERGENTE: UN AUXILIAR -->
+<!-- VENTANA EMERGENTE: UNA PERSONA -->
 <div class="fondo-modal" id="modal-aux">
   <div class="modal">
-    <h3 id="modal-aux-titulo">Nuevo auxiliar</h3>
-    <label>DNI</label>
-    <input type="text" id="aux-dni" placeholder="Solo números o letras, sin espacios" maxlength="15" inputmode="text" autocomplete="off">
+    <h3 id="modal-aux-titulo">Nueva persona</h3>
+    <label>Rol</label>
+    <select id="per-rol">
+      <option value="auxiliar">Auxiliar de piso (ingresa solo con DNI)</option>
+      <option value="asistente">Asistente (usuario y contraseña)</option>
+      <option value="admin">Administradora (usuario y contraseña)</option>
+    </select>
+    <label id="per-etq-usuario">DNI (con esto ingresa)</label>
+    <input type="text" id="per-usuario" maxlength="30" autocomplete="off" autocapitalize="none">
     <label>Nombre</label>
-    <input type="text" id="aux-nombre" placeholder="Ej: KIARA LOPEZ" autocomplete="off">
+    <input type="text" id="per-nombre" placeholder="Ej: KIARA LOPEZ" autocomplete="off">
+    <label>Cargo (opcional)</label>
+    <input type="text" id="per-cargo" placeholder="Ej: Asistente de Inventario" autocomplete="off">
+    <div id="per-grupo-pass" style="display:none">
+      <label>Contraseña</label>
+      <input type="text" id="per-pass" autocomplete="new-password">
+    </div>
     <div class="botones">
       <button class="btn gris" data-acc="aux-cerrar">Cancelar</button>
       <button class="btn" data-acc="aux-guardar">Guardar</button>
