@@ -552,9 +552,9 @@ window.addEventListener("hashchange", render);
   verificarEstadoSesion();
 })();
 
-/* ==========================================================================
-   MÓDULO DE VALIDACIÓN OUTBOUND - VISTAS Y CONEXIÓN EN VIVO
-   ========================================================================== */
+// ==========================================================================
+// MÓDULO DE VALIDACIÓN OUTBOUND - SUBIDA DE ARCHIVOS EXCEL Y SINCRONIZACIÓN
+// ==========================================================================
 
 async function renderVistaValidacionOutbound(main) {
     main.innerHTML = `
@@ -583,11 +583,25 @@ async function renderVistaValidacionOutbound(main) {
                 <p style="margin:0; font-size:13px; color:#e0e0e0;">Panel de control y validación ciega de canales de despacho por FO y fases.</p>
             </div>
 
-            <!-- Panel de Carga Rápida / Pegado de Excel o SAP -->
-            <div class="tarjeta" style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:15px; margin-bottom:20px;">
-                <h3 style="color:#0f2150; margin-top:0; font-size:15px;">📄 Pegar filas de Excel / SAP (Picking / Status)</h3>
-                <textarea id="textoPegadoExcel" rows="3" placeholder="Pegue aquí las filas copiadas con su respectiva información..." style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-family:monospace; margin-bottom:10px;"></textarea>
-                <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:10px 16px; border-radius:6px; font-weight:700; cursor:pointer;" onclick="procesarPegadoMaster()">💾 GUARDAR DATOS PEGADOS</button>
+            <!-- Panel de Carga Directa de Archivos Excel / SAP -->
+            <div class="tarjeta" style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:20px; margin-bottom:20px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+                <h3 style="color:#0f2150; margin-top:0; font-size:16px;">📂 Subir archivo Excel operativo (Picking / Stock / Status)</h3>
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Tipo de documento:</label>
+                    <select id="tipoDocumentoArchivo" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+                        <option value="picking">PICKING (reemplaza solo las fases del archivo)</option>
+                        <option value="stock">STOCK ENTREGAS (reemplaza toda la hoja)</option>
+                        <option value="monitor">MONITOR / STATUS (reemplaza la hoja)</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Seleccionar archivo Excel (.xlsx / .csv):</label>
+                    <input type="file" id="inputArchivoExcel" accept=".xlsx, .xls, .csv" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; background:#fafafa;">
+                </div>
+
+                <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; cursor:pointer;" onclick="procesarArchivoExcelSubido()">🚀 PROCESAR Y SUBIR ARCHIVO A SUPABASE</button>
             </div>
 
             <!-- Botonera superior de Sincronización Web -->
@@ -624,7 +638,7 @@ function generarTarjetasHTML(registros) {
         return `
             <div class="tarjeta" style="text-align:center; padding:25px; background:#fff; border-radius:10px; border:1px solid #ddd;">
                 <h3 style="color:#0f2150; margin-bottom:8px;">No hay fases cargadas actualmente</h3>
-                <p style="color:#666; font-size:13px; margin-bottom:15px;">Haz clic en <b>"Sincronizar Drive de Despachos"</b> o pega tus filas arriba para empezar.</p>
+                <p style="color:#666; font-size:13px; margin-bottom:15px;">Selecciona tu archivo Excel arriba o haz clic en <b>"Sincronizar Drive de Despachos"</b>.</p>
             </div>
         `;
     }
@@ -663,6 +677,73 @@ function generarTarjetasHTML(registros) {
     return html;
 }
 
+// Procesar el archivo Excel subido por el usuario
+async function procesarArchivoExcelSubido() {
+    const inputArchivo = document.getElementById('inputArchivoExcel');
+    if (!inputArchivo || !inputArchivo.files || inputArchivo.files.length === 0) {
+        alert("Por favor, selecciona primero un archivo Excel (.xlsx o .csv).");
+        return;
+    }
+
+    const archivo = inputArchivo.files[0];
+    alert(`Leyendo y procesando el archivo: ${archivo.name}...`);
+
+    const lector = new FileReader();
+    lector.onload = async function(e) {
+        try {
+            const datosBinarios = new Uint8Array(e.target.result);
+            const libro = XLSX.read(datosBinarios, { type: 'array' });
+            const nombreHoja = libro.SheetNames[0];
+            const hoja = libro.Sheets[nombreHoja];
+            const filasJson = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+
+            let procesados = 0;
+            const registrosUpsert = [];
+
+            // Recorremos las filas del Excel omitiendo el encabezado (fila 0)
+            for (let i = 1; i < filasJson.length; i++) {
+                const fila = filasJson[i];
+                if (!fila || fila.length === 0) continue;
+
+                // Buscamos columnas comunes de FO y Fase en la fila
+                let foVal = String(fila[4] || fila[0] || "").trim();
+                let faseVal = String(fila[5] || fila[1] || "").trim();
+                let clienteVal = String(fila[6] || fila[2] || "").trim() || "CLIENTE L400";
+
+                if (foVal && foVal.length >= 6) {
+                    registrosUpsert.push({
+                        id: foVal,
+                        fo: foVal,
+                        fase: faseVal || "01",
+                        cliente: clienteVal.toUpperCase(),
+                        validador: "RUTHVAL",
+                        estadoApp: "EN PROCESO"
+                    });
+                    procesados++;
+                }
+            }
+
+            if (registrosUpsert.length === 0) {
+                throw new Error("No se encontraron columnas válidas de FO/Fase en el archivo seleccionado.");
+            }
+
+            const { error: errorSinc } = await supabaseClient
+                .from('val_fases')
+                .upsert(registrosUpsert, { onConflict: 'id' });
+
+            if (errorSinc) throw errorSinc;
+
+            alert(`¡Archivo procesado con éxito! Se cargaron ${procesados} registros a Supabase.`);
+            renderVistaValidacionOutbound(document.querySelector('main'));
+
+        } catch (err) {
+            console.error("Error al procesar el archivo Excel:", err);
+            alert("Error al procesar el archivo: " + err.message);
+        }
+    };
+    lector.readAsArrayBuffer(archivo);
+}
+
 // Sincronización Web Directa desde Google Sheets
 async function sincronizarDriveDespachosWeb() {
     alert("Sincronizando datos desde el Drive de Despachos en línea...");
@@ -697,13 +778,6 @@ async function sincronizarDriveDespachosWeb() {
             }
         }
 
-        if (registrosUpsert.length === 0) {
-            registrosUpsert.push(
-                { id: "1000182718", fo: "1000182718", fase: "4000003784", cliente: "INRETAIL PHARMA S.A.", validador: "RUTHVAL", estadoApp: "EN PROCESO" },
-                { id: "1000182719", fo: "1000182719", fase: "4000003781", cliente: "INRETAIL PHARMA S.A.", validador: "RUTHVAL", estadoApp: "EN PROCESO" }
-            );
-        }
-
         const { error: errorSinc } = await supabaseClient
             .from('val_fases')
             .upsert(registrosUpsert, { onConflict: 'id' });
@@ -716,44 +790,6 @@ async function sincronizarDriveDespachosWeb() {
     } catch (err) {
         console.error("Error en sincronización web:", err);
         alert("Error: " + err.message);
-    }
-}
-
-// Procesar texto pegado de Excel o SAP
-async function procesarPegadoMaster() {
-    const textoPegado = document.getElementById('textoPegadoExcel').value.trim();
-    if (!textoPegado) {
-        alert("Por favor, pegue las filas de Excel para continuar.");
-        return;
-    }
-
-    alert("Procesando datos en Supabase...");
-
-    try {
-        const lineas = textoPegado.split("\n");
-        let procesados = 0;
-
-        for (let i = 0; i < lineas.length; i++) {
-            const columnas = lineas[i].split("\t");
-            if (columnas.length >= 1) {
-                let fo = columnas[0]?.trim();
-                let fase = columnas[1]?.trim() || "01";
-                
-                if (fo && fo.length >= 6) {
-                    await supabaseClient.from('val_fases').upsert([
-                        { id: fo, fo: fo, fase: fase, estadoApp: "EN PROCESO", validador: "RUTHVAL" }
-                    ], { onConflict: 'id' });
-                    procesados++;
-                }
-            }
-        }
-
-        alert(`¡Carga completada con éxito! Se procesaron ${procesados} registros.`);
-        renderVistaValidacionOutbound(document.querySelector('main'));
-
-    } catch (err) {
-        console.error("Error al procesar pegado:", err);
-        alert("Error en la carga: " + err.message);
     }
 }
 
