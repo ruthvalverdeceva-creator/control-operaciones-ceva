@@ -263,11 +263,7 @@ function vistaInicio(main) {
 
 function vistaInventario(main, sub) {
   if (sub === "validacion") {
-    main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>' +
-      '<h2>Validación ciega de canales Outbound</h2><p>Módulo operativo para el registro y cruce de datos en piso.</p></div>' +
-      '<div class="tarjeta bloque-admin"><h3><span>Panel de Validación Ciega</span></h3>' +
-      '<p class="nota">Aquí los auxiliares realizarán el escaneo y conteo por paleta (HU, SKU, cantidad) conectado directamente al flujo de operaciones de despacho.</p>' +
-      '</div>';
+    renderVistaValidacionOutbound(main);
     return;
   }
 
@@ -574,3 +570,90 @@ window.addEventListener("hashchange", render);
   usuarioActual = await cargarPerfil();
   verificarEstadoSesion();
 })();
+
+// Pantalla Móvil del Auxiliar - Conteo Ciego por Paleta (Etapa 2)
+function renderVistaValidacionOutbound(main) {
+    main.innerHTML = `
+        <div class="tarjeta encabezado">
+            <div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>
+            <h2>Validación ciega de canales Outbound</h2>
+            <p>Módulo operativo para el registro y conteo de datos en piso (Etapa 2 Activa).</p>
+        </div>
+
+        <div class="tarjeta bloque-admin" style="max-width: 500px; margin: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span class="tag" id="lblPaletaT" style="background:#0f2150; color:#fff; padding:6px 12px; border-radius:8px; font-weight:700;">PALETA 1</span>
+                <button class="btn r sm" style="background:#e30a17; color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer;" onclick="alert('Auditoría finalizada de prueba')">FINALIZAR AUDITORÍA</button>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-weight:700; font-size:13px;">1° HU DE LA PALETA (Escanee la etiqueta)</label>
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                    <input type="text" id="inputHU" placeholder="ESCANEE EL HU" style="flex:1; padding:10px; border:2px solid #111; border-radius:8px; font-weight:700; text-transform:uppercase;">
+                    <button type="button" onclick="document.getElementById('inputHU').value='SN'; document.getElementById('inputSKU').focus();" style="background:#ffbd59; border:2px solid #111; border-radius:8px; padding:0 14px; font-weight:800; cursor:pointer;">SN</button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-bottom: 10px;">
+                <div>
+                    <label style="font-weight:700; font-size:13px;">SKU / EAN</label>
+                    <input type="text" id="inputSKU" placeholder="Escanee SKU o EAN" style="width:100%; padding:10px; border:2px solid #111; border-radius:8px; margin-top:4px;">
+                </div>
+                <div>
+                    <label style="font-weight:700; font-size:13px;">UMA</label>
+                    <input type="text" id="inputUMA" readonly style="width:100%; padding:10px; border:1px solid #777; background:#d9d9d9; border-radius:8px; margin-top:4px;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="font-weight:700; font-size:13px;">DESCRIPCIÓN</label>
+                <input type="text" id="inputDesc" readonly style="width:100%; padding:10px; border:1px solid #777; background:#d9d9d9; border-radius:8px; margin-top:4px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="font-weight:700; font-size:13px;">CANTIDAD (Bultos)</label>
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                    <input type="number" id="inputCant" placeholder="Cantidad" style="flex:1; padding:10px; border:2px solid #111; border-radius:8px; font-size:18px; font-weight:700; text-align:center;">
+                    <button type="button" onclick="agregarItemPrueba()" style="background:#0f2150; color:#fff; border:0; border-radius:8px; padding:0 16px; font-weight:700; cursor:pointer;">AGREGAR</button>
+                </div>
+            </div>
+
+            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead>
+                    <tr style="background:#0f2150; color:#fff;">
+                        <th style="padding:8px; text-align:left; font-size:12px;">Código</th>
+                        <th style="padding:8px; text-align:left; font-size:12px;">Desc.</th>
+                        <th style="padding:8px; text-align:center; font-size:12px;">Cant</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaItemsPrueba">
+                    <tr><td colspan="3" style="text-align:center; color:#888; padding:12px;">No hay códigos escaneados en esta paleta.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function agregarItemPrueba() {
+    const hu = document.getElementById('inputHU').value.trim();
+    const sku = document.getElementById('inputSKU').value.trim();
+    const cant = document.getElementById('inputCant').value.trim();
+
+    if (!hu) { alert('Primero escanee o indique el HU'); return; }
+    if (!sku || !cant) { alert('Ingrese el SKU y la cantidad'); return; }
+
+    const tbody = document.getElementById('tablaItemsPrueba');
+    if (tbody.querySelector('td[colspan]')) tbody.innerHTML = '';
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td style="padding:8px; border-bottom:1px solid #ddd; font-weight:700;">${sku}</td>
+        <td style="padding:8px; border-bottom:1px solid #ddd; font-size:12px; color:#555;">Artículo escaneado en planta</td>
+        <td style="padding:8px; border-bottom:1px solid #ddd; text-align:center; font-weight:700;">${cant}</td>
+    `;
+    tbody.appendChild(row);
+
+    document.getElementById('inputSKU').value = '';
+    document.getElementById('inputCant').value = '';
+    document.getElementById('inputSKU').focus();
+}
