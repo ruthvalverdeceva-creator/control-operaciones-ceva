@@ -194,7 +194,7 @@ window.addEventListener("hashchange", render);
 })();
 
 /* ==========================================================================
-   MÓDULO DE VALIDACIÓN OUTBOUND Y PROCESAMIENTO EXCEL
+   MÓDULO DE VALIDACIÓN OUTBOUND Y PROCESAMIENTO EXCEL (CONECTADO AL DRIVE)
    ========================================================================== */
 
 async function renderVistaValidacionOutbound(main) {
@@ -219,7 +219,7 @@ async function renderVistaValidacionOutbound(main) {
                 <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Seleccionar archivo Excel (.xlsx / .csv):</label>
                 <input type="file" id="inputArchivoExcel" accept=".xlsx, .xls, .csv" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; background:#fafafa;">
             </div>
-            <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; cursor:pointer;" onclick="procesarArchivoExcelSubido()">🚀 PROCESAR Y SUBIR ARCHIVO A SUPABASE</button>
+            <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; cursor:pointer;" onclick="procesarArchivoExcelSubido()">🚀 PROCESAR Y CRUZAR CON DRIVE DE DESPACHOS</button>
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
@@ -281,63 +281,99 @@ async function procesarArchivoExcelSubido() {
     }
 
     const archivo = inputArchivo.files[0];
-    alert(`Leyendo y procesando el archivo de [${tipoDoc.toUpperCase()}]...`);
+    alert(`Procesando [${tipoDoc.toUpperCase()}] y cruzando datos con el Drive de Despachos online...`);
 
-    const lector = new FileReader();
-    lector.onload = async function(e) {
-        try {
-            const datosBinarios = new Uint8Array(e.target.result);
-            const libro = XLSX.read(datosBinarios, { type: 'array' });
-            const nombreHoja = libro.SheetNames[0];
-            const hoja = libro.Sheets[nombreHoja];
-            const filasJson = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+    try {
+        const urlExport = `https://docs.google.com/spreadsheets/d/${ID_GOOGLE_SHEET_DESPACHOS}/export?format=csv`;
+        const res = await fetch(urlExport);
+        if (!res.ok) throw new Error("No se pudo conectar con el Google Sheet de Despachos.");
+        const csvText = await res.text();
+        const lineasDrive = csvText.split("\n");
 
-            let procesados = 0;
-            const registrosUpsert = [];
+        const mapaMaestro = {};
+        for (let i = 1; i < lineasDrive.length; i++) {
+            const cols = lineasDrive[i].split(",");
+            if (!cols || cols.length < 6) continue;
+            let foVal = (cols[4] || "").replace(/"/g, '').trim();
+            let faseVal = (cols[5] || "").replace(/"/g, '').trim();
+            let clienteVal = (cols[6] || "").replace(/"/g, '').trim() || "CLIENTE L400";
+            let entregaVal = (cols[1] || "").replace(/"/g, '').trim();
 
-            for (let i = 1; i < filasJson.length; i++) {
-                const fila = filasJson[i];
-                if (!fila || fila.length === 0) continue;
-
-                let foVal = String(fila[4] || fila[0] || "").trim();
-                let faseVal = String(fila[5] || fila[1] || "").trim();
-                let clienteVal = String(fila[6] || fila[2] || "").trim() || "CLIENTE L400";
-                
-                let estadoVal = String(fila[10] || "").trim().toUpperCase();
-                let estatusActualizado = (estadoVal.includes("CONFIRM") || estadoVal.includes("CERRAD")) ? "CERRADO" : "EN PROCESO";
-
-                if (foVal && foVal.length >= 6) {
-                    registrosUpsert.push({
-                        id: foVal,
-                        fo: foVal,
-                        fase: faseVal || "01",
-                        cliente: clienteVal.toUpperCase(),
-                        estadoApp: estatusActualizado,
-                        validador: "RUTHVAL"
-                    });
-                    procesados++;
-                }
+            if (foVal) {
+                mapaMaestro[foVal] = { fo: foVal, fase: faseVal || "01", cliente: clienteVal.toUpperCase() };
+                if (entregaVal) mapaMaestro[entregaVal] = { fo: foVal, fase: faseVal || "01", cliente: clienteVal.toUpperCase() };
             }
-
-            if (registrosUpsert.length === 0) {
-                throw new Error("No se encontraron columnas válidas de FO/Fase en el archivo seleccionado.");
-            }
-
-            const { error: errorSinc } = await supabaseClient
-                .from('val_fases')
-                .upsert(registrosUpsert, { onConflict: 'id' });
-
-            if (errorSinc) throw errorSinc;
-
-            alert(`¡Sincronización exitosa! Se actualizaron estatus y se agregaron registros nuevos (${procesados} en total).`);
-            renderVistaValidacionOutbound(document.querySelector('main'));
-
-        } catch (err) {
-            console.error("Error al procesar el archivo Excel:", err);
-            alert("Error al procesar el archivo: " + err.message);
         }
-    };
-    lector.readAsArrayBuffer(archivo);
+
+        const lector = new FileReader();
+        lector.onload = async function(e) {
+            try {
+                const datosBinarios = new Uint8Array(e.target.result);
+                const libro = XLSX.read(datosBinarios, { type: 'array' });
+                const hoja = libro.Sheets[libro.SheetNames[0]];
+                const filasJson = XLSX.utils.sheet_to_json(hoja, { defval: "" });
+
+                if (filasJson.length === 0) throw new Error("El archivo Excel está vacío.");
+
+                const primeraFila = filasJson[0];
+                const llaves = Object.keys(primeraFila);
+
+                const colFO = llaves.find(k => k.trim().toUpperCase().includes('FO') || k.trim().toUpperCase().includes('VIAJE'));
+                const colEntrega = llaves.find(k => k.trim().toUpperCase().includes('ENTREGA') || k.trim().toUpperCase().includes('PEDIDO') || k.trim().toUpperCase().includes('DOCUMENTO'));
+                const colEstado = llaves.find(k => k.trim().toUpperCase().includes('ESTADO') || k.trim().toUpperCase().includes('STATUS') || k.trim().toUpperCase().includes('ESTATUS'));
+
+                let procesados = 0;
+                const registrosUpsert = [];
+
+                filasJson.forEach((fila) => {
+                    let codigoBuscado = "";
+                    if (colFO && fila[colFO]) codigoBuscado = String(fila[colFO]).trim();
+                    if (!codigoBuscado && colEntrega && fila[colEntrega]) codigoBuscado = String(fila[colEntrega]).trim();
+
+                    if (!codigoBuscado) return;
+
+                    let datosMaestros = mapaMaestro[codigoBuscado];
+
+                    if (datosMaestros) {
+                        let estadoVal = colEstado ? String(fila[colEstado] || "").trim().toUpperCase() : "";
+                        let estatusActualizado = (estadoVal.includes("CONFIRM") || estadoVal.includes("CERRAD")) ? "CERRADO" : "EN PROCESO";
+
+                        registrosUpsert.push({
+                            id: datosMaestros.fo,
+                            fo: datosMaestros.fo,
+                            fase: datosMaestros.fase,
+                            cliente: datosMaestros.cliente,
+                            estadoApp: estatusActualizado,
+                            validador: "RUTHVAL"
+                        });
+                        procesados++;
+                    }
+                });
+
+                if (registrosUpsert.length === 0) {
+                    throw new Error("No se pudo relacionar ninguna entrega/FO del archivo con el Drive de Despachos online.");
+                }
+
+                const { error: errorSinc } = await supabaseClient
+                    .from('val_fases')
+                    .upsert(registrosUpsert, { onConflict: 'id' });
+
+                if (errorSinc) throw errorSinc;
+
+                alert(`¡Cruce y sincronización exitosa! Se procesaron y actualizaron ${procesados} registros usando el Drive de Despachos.`);
+                renderVistaValidacionOutbound(document.querySelector('main'));
+
+            } catch (err) {
+                console.error("Error procesando archivo interno:", err);
+                alert("Error: " + err.message);
+            }
+        };
+        lector.readAsArrayBuffer(archivo);
+
+    } catch (err) {
+        console.error("Error al conectar con Drive:", err);
+        alert("Error al consultar el Drive de Despachos: " + err.message);
+    }
 }
 
 async function sincronizarDriveDespachosWeb() {
