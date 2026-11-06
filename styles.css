@@ -158,7 +158,7 @@ td.acc .btn { margin-left: 6px; padding: 6px 12px; }
 .modal { background: #fff; border-radius: 16px; padding: 28px; width: 100%; max-width: 620px; }
 .modal h3 { color: var(--azul); margin-bottom: 14px; font-size: 20px; }
 .modal label { font-weight: 600; font-size: 14px; display: block; margin: 12px 0 6px; }
-.modal input { width: 100%; padding: 12px; border: 1px solid #c3cbd9; border-radius: 8px; font-size: 14px; }
+.modal input, .modal select { width: 100%; padding: 12px; border: 1px solid #c3cbd9; border-radius: 8px; font-size: 14px; }
 .modal .botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .ayuda { background: var(--azul-claro); border-radius: 8px; padding: 12px; font-size: 13px; color: var(--azul); margin-top: 14px; line-height: 1.5; }
 
