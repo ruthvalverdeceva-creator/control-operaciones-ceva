@@ -552,79 +552,84 @@ window.addEventListener("hashchange", render);
   verificarEstadoSesion();
 })();
 
-// ==========================================================================
-// PROCESAR Y SUBIR ARCHIVO EXCEL DE PICKING (ACTUALIZAR Y AGREGAR INTELIGENTE)
-// ==========================================================================
+// ==========================================
+// MÓDULO DE VALIDACIÓN OUTBOUND CORREGIDO
+// ==========================================
 
-async function procesarArchivoExcelSubido() {
-    const inputArchivo = document.getElementById('inputArchivoExcel');
-    const tipoDoc = document.getElementById('tipoDocumentoArchivo').value;
+function vistaInventario(main, sub) {
+  if (sub === "validacion") {
+    renderVistaValidacionOutbound(main);
+    return;
+  }
 
-    if (!inputArchivo || !inputArchivo.files || inputArchivo.files.length === 0) {
-        alert("Por favor, selecciona primero un archivo Excel (.xlsx o .csv).");
-        return;
-    }
+  main.innerHTML = `
+    <div class="tarjeta encabezado">
+      <div class="migas"><a href="#inicio">Inicio</a> / Inventario</div>
+      <h2>📦 INVENTARIO</h2>
+      <p>Herramientas operativas de piso y control logístico.</p>
+    </div>
+    <div class="grid">
+      <a class="tarjeta modulo" href="#inventario/validacion">
+        <div class="icono">✅</div>
+        <h3>VALIDACIÓN OUTBOUND</h3>
+        <p>Validación ciega de canales de despacho, cruce por viaje y por HU.</p>
+        <div class="meta">Herramienta activa</div>
+        <span class="abrir">Abrir herramienta →</span>
+      </a>
+    </div>
+  `;
+}
 
-    const archivo = inputArchivo.files[0];
-    alert(`Leyendo y procesando el archivo de [${tipoDoc.toUpperCase()}] para actualizar estatus y agregar nuevos...`);
+async function renderVistaValidacionOutbound(main) {
+    main.innerHTML = `
+        <div class="tarjeta encabezado" style="background:#0f2150; color:#fff; border-radius:12px; padding:20px; margin-bottom:20px;">
+            <div class="migas" style="color:#adb5bd;"><a href="#inicio" style="color:#adb5bd;">Inicio</a> / <a href="#inventario" style="color:#adb5bd;">Inventario</a> / Validación Outbound</div>
+            <h2 style="color:#fff; margin:10px 0 5px 0;">CONTROL OPERATIVO OUTBOUND</h2>
+            <p style="margin:0; font-size:13px; color:#e0e0e0;">Panel de control y validación de despachos.</p>
+        </div>
 
-    const lector = new FileReader();
-    lector.onload = async function(e) {
-        try {
-            const datosBinarios = new Uint8Array(e.target.result);
-            const libro = XLSX.read(datosBinarios, { type: 'array' });
-            const nombreHoja = libro.SheetNames[0];
-            const hoja = libro.Sheets[nombreHoja];
-            const filasJson = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+        <div class="tarjeta" style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:20px; margin-bottom:20px;">
+            <h3 style="color:#0f2150; margin-top:0; font-size:16px;">📂 Subir archivo Excel operativo (Picking / Status)</h3>
+            <div style="margin-bottom: 12px;">
+                <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Tipo de documento:</label>
+                <select id="tipoDocumentoArchivo" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+                    <option value="picking">PICKING (actualiza estatus y agrega nuevos)</option>
+                    <option value="stock">STOCK ENTREGAS</option>
+                    <option value="monitor">MONITOR / STATUS</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="font-weight:700; font-size:12px; display:block; margin-bottom:4px;">Seleccionar archivo Excel (.xlsx / .csv):</label>
+                <input type="file" id="inputArchivoExcel" accept=".xlsx, .xls, .csv" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; background:#fafafa;">
+            </div>
+            <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:12px; border-radius:8px; font-weight:700; width:100%; cursor:pointer;" onclick="procesarArchivoExcelSubido()">🚀 PROCESAR Y SUBIR ARCHIVO A SUPABASE</button>
+        </div>
 
-            let procesados = 0;
-            const registrosUpsert = [];
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+            <button class="btn" style="background:#0f2150; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="renderVistaValidacionOutbound(document.querySelector('main'))">🔄 ACTUALIZAR</button>
+            <button class="btn" style="background:#198754; color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;" onclick="sincronizarDriveDespachosWeb()">📥 SINCRONIZAR DRIVE DE DESPACHOS</button>
+        </div>
+    `;
 
-            // Recorremos las filas del Excel omitiendo el encabezado (fila 0)
-            for (let i = 1; i < filasJson.length; i++) {
-                const fila = filasJson[i];
-                if (!fila || fila.length === 0) continue;
-
-                // Extraemos los campos adaptados de tu estructura de Picking/Status
-                let foVal = String(fila[4] || fila[0] || "").trim();
-                let faseVal = String(fila[5] || fila[1] || "").trim();
-                let clienteVal = String(fila[6] || fila[2] || "").trim() || "CLIENTE L400";
-                
-                // Si el archivo trae indicadores de estatus o avance, los leemos para actualizar el cambio
-                let estadoVal = String(fila[10] || "").trim().toUpperCase();
-                let estatusActualizado = (estadoVal.includes("CONFIRM") || estadoVal.includes("CERRAD")) ? "CERRADO" : "EN PROCESO";
-
-                if (foVal && foVal.length >= 6) {
-                    registrosUpsert.push({
-                        id: foVal,          // Clave única para saber si ya existe o es nuevo
-                        fo: foVal,
-                        fase: faseVal || "01",
-                        cliente: clienteVal.toUpperCase(),
-                        estadoApp: estatusActualizado, // Actualiza el estatus si cambió en el Excel
-                        validador: "RUTHVAL"
-                    });
-                    procesados++;
-                }
-            }
-
-            if (registrosUpsert.length === 0) {
-                throw new Error("No se encontraron columnas válidas de FO/Fase en el archivo seleccionado.");
-            }
-
-            // UPSERT INTELIGENTE: Actualiza lo existente (si cambió de estatus) e inserta lo nuevo
-            const { error: errorSinc } = await supabaseClient
-                .from('val_fases')
-                .upsert(registrosUpsert, { onConflict: 'id' });
-
-            if (errorSinc) throw errorSinc;
-
-            alert(`¡Sincronización exitosa! Se actualizaron estatus y se agregaron registros nuevos (${procesados} en total).`);
-            renderVistaValidacionOutbound(document.querySelector('main'));
-
-        } catch (err) {
-            console.error("Error al procesar el archivo Excel:", err);
-            alert("Error al procesar el archivo: " + err.message);
+    try {
+        const { data: registros, error } = await supabaseClient.from('val_fases').select('*');
+        if (error) throw error;
+        
+        const lista = registros || [];
+        if (lista.length > 0) {
+            let htmlTarjetas = `<div style="display: grid; gap: 15px; margin-top: 15px;">`;
+            lista.forEach(v => {
+                htmlTarjetas += `
+                    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:15px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+                        <strong style="font-size:16px; color:#0f2150;">FO: ${v.fo}</strong>
+                        <p style="margin:5px 0 0 0; font-size:13px; color:#555;">Fase: ${v.fase} - Cliente: ${v.cliente || 'L400'} | Estado: <b>${v.estadoApp || 'EN PROCESO'}</b></p>
+                    </div>
+                `;
+            });
+            htmlTarjetas += `</div>`;
+            main.innerHTML += htmlTarjetas;
         }
-    };
-    lector.readAsArrayBuffer(archivo);
+    } catch (err) {
+        console.error("Error al cargar registros:", err);
+    }
 }
