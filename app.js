@@ -264,19 +264,27 @@ function vistaInicio(main) {
 function vistaInventario(main, sub) {
   if (sub === "validacion") {
     main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>' +
-      '<h2>Validación ciega de canales Outbound</h2><p>Esta herramienta se está construyendo por etapas.</p></div>' +
-      '<div class="tarjeta bloque-admin"><h3><span>Etapas</span></h3><table>' +
-      '<tr><td>1. Accesos: usuario y contraseña para asistentes, solo DNI para auxiliares</td><td><span class="estado ok">Listo</span></td></tr>' +
-      '<tr><td>2. Pantalla móvil del auxiliar: conteo ciego por paleta (HU, SKU, cantidad)</td><td><span class="estado pend">Siguiente</span></td></tr>' +
-      '<tr><td>3. Conexión con el Drive de Despacho (viajes, fases, canales)</td><td><span class="estado pend">Pendiente</span></td></tr>' +
-      '<tr><td>4. Cruce por código por viaje y descarga de un solo Excel</td><td><span class="estado pend">Pendiente</span></td></tr>' +
-      '<tr><td>5. Cruce por HU / picking</td><td><span class="estado pend">Pendiente</span></td></tr></table></div>';
+      '<h2>Validación ciega de canales Outbound</h2><p>Módulo operativo para el registro y cruce de datos en piso.</p></div>' +
+      '<div class="tarjeta bloque-admin"><h3><span>Panel de Validación Ciega</span></h3>' +
+      '<p class="nota">Aquí los auxiliares realizarán el escaneo y conteo por paleta (HU, SKU, cantidad) conectado directamente al flujo de operaciones de despacho.</p>' +
+      '</div>';
     return;
   }
-  main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / Inventario</div>' +
-    '<h2>Inventario</h2><p>Elige una herramienta.</p></div><div class="grid">' +
-    '<a class="tarjeta modulo" href="#inventario/validacion"><div class="icono">✅</div><h3>VALIDACIÓN OUTBOUND</h3>' +
-    '<p>Validación ciega de canales de despacho, cruce por viaje y por HU.</p><div class="meta">En construcción</div><span class="abrir">Abrir →</span></a></div>';
+
+  // Vista principal del módulo de Inventario (Herramientas operativas separadas de los reportes)
+  main.innerHTML = '<div class="tarjeta encabezado">' +
+    '<div class="migas"><a href="#inicio">Inicio</a> / Inventario</div>' +
+    '<h2>📦 INVENTARIO</h2>' +
+    '<p>Herramientas operativas de piso y control logístico.</p></div>' +
+    '<div class="grid">' +
+    '<a class="tarjeta modulo" href="#inventario/validacion">' +
+    '<div class="icono">✅</div>' +
+    '<h3>VALIDACIÓN OUTBOUND</h3>' +
+    '<p>Validación ciega de canales de despacho, cruce por viaje y por HU.</p>' +
+    '<div class="meta">Herramienta activa</div>' +
+    '<span class="abrir">Abrir herramienta →</span>' +
+    '</a>' +
+    '</div>';
 }
 
 function vistaReportes(main) {
