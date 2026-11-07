@@ -130,12 +130,6 @@ document.addEventListener("submit", async e => {
     const { data, error } = await supabaseClient.rpc("val_entrar", { p_usuario: usuario, p_password: pass || null });
     if (error) throw new Error("No se pudo conectar. Revisa tu internet e inténtalo de nuevo.");
     if (!data || !data.ok) throw new Error((data && data.msg) || "Usuario o contraseña incorrectos.");
-    if (data.rol === "auxiliar") {
-      fijarToken(data.token);
-      // Los auxiliares tienen su propia pantalla (para celular)
-      location.href = "validar.html";
-      return;
-    }
     fijarToken(data.token);
     usuarioActual = { usuario: data.usuario, nombre: data.nombre, cargo: data.cargo || "", rol: data.rol };
     $("#form-login").reset();
@@ -147,14 +141,15 @@ document.addEventListener("submit", async e => {
   }
 });
 
+async function cerrarSesion() {
+  try { await supabaseClient.rpc("val_salir"); } catch (ex) {}
+  fijarToken(null);
+  usuarioActual = null; AUX = null;
+  verificarEstadoSesion();
+}
+
 document.addEventListener("click", async e => {
-  if (e.target && e.target.id === "btn-cerrar-sesion") {
-    try { await supabaseClient.rpc("val_salir"); } catch (ex) {}
-    fijarToken(null);
-    usuarioActual = null; AUX = null;
-    verificarEstadoSesion();
-    return;
-  }
+  if (e.target && e.target.id === "btn-cerrar-sesion") { await cerrarSesion(); return; }
 
   const b = e.target.closest("[data-acc]"); if (!b) return;
   const a = b.dataset.acc, m = b.dataset.m, d = b.dataset.d;
@@ -191,6 +186,16 @@ document.addEventListener("click", async e => {
 });
 
 function verificarEstadoSesion() {
+  const va = $("#vista-aux");
+  if (usuarioActual && usuarioActual.rol === "auxiliar") {
+    // El auxiliar entra directo a su módulo: Validación Outbound (sin menús ni reportes)
+    $("#vista-login").style.display = "none";
+    $("#contenedor-principal").style.display = "none";
+    va.style.display = "block";
+    VAL.aux.iniciar(usuarioActual);
+    return;
+  }
+  if (va) { va.style.display = "none"; va.innerHTML = ""; }
   if (usuarioActual) {
     $("#vista-login").style.display = "none";
     $("#contenedor-principal").style.display = "flex";
@@ -263,21 +268,11 @@ function vistaInicio(main) {
 }
 
 function vistaInventario(main, sub) {
-  if (sub === "validacion") {
-    main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / <a href="#inventario">Inventario</a> / Validación Outbound</div>' +
-      '<h2>Validación ciega de canales Outbound</h2><p>Esta herramienta se está construyendo por etapas.</p></div>' +
-      '<div class="tarjeta bloque-admin"><h3><span>Etapas</span></h3><table>' +
-      '<tr><td>1. Accesos: usuario y contraseña para asistentes, solo DNI para auxiliares</td><td><span class="estado ok">Listo</span></td></tr>' +
-      '<tr><td>2. Pantalla móvil del auxiliar: conteo ciego por paleta (HU, SKU, cantidad)</td><td><span class="estado ok">Lista para probar</span></td></tr>' +
-      '<tr><td>3. Conexión con el Drive de Despacho (viajes, fases, canales)</td><td><span class="estado pend">Pendiente</span></td></tr>' +
-      '<tr><td>4. Cruce por código por viaje y descarga de un solo Excel</td><td><span class="estado pend">Pendiente</span></td></tr>' +
-      '<tr><td>5. Cruce por HU / picking</td><td><span class="estado pend">Pendiente</span></td></tr></table></div>';
-    return;
-  }
+  if (sub === "validacion") { VAL.staff.render(main, usuarioActual.usuario, esAdmin()); return; }
   main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / Inventario</div>' +
     '<h2>Inventario</h2><p>Elige una herramienta.</p></div><div class="grid">' +
     '<a class="tarjeta modulo" href="#inventario/validacion"><div class="icono">✅</div><h3>VALIDACIÓN OUTBOUND</h3>' +
-    '<p>Validación ciega de canales de despacho, cruce por viaje y por HU.</p><div class="meta">En construcción</div><span class="abrir">Abrir →</span></a></div>';
+    '<p>Validación ciega de canales de despacho, carga de Excel y cruce por viaje.</p><div class="meta">Fases · Cargar datos · Cruce</div><span class="abrir">Abrir →</span></a></div>';
 }
 
 function vistaReportes(main) {
