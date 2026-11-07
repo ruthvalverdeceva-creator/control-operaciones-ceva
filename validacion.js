@@ -1,0 +1,94 @@
+/* ===== Módulo Validación Outbound (look de la app anterior) ===== */
+#vista-aux { display: none; background: #fff; min-height: 100vh; color: #111; font-family: "Open Sans", Arial, sans-serif; }
+.vx { --navy: #0f2150; --blue: #004aad; --red: #e30a17; --org: #ffbd59; --grn: #00b050; --gry: #666; }
+.vx * { box-sizing: border-box; }
+#vista-aux .vx-wrap { max-width: 480px; margin: 0 auto; padding: 16px 16px 40px; }
+.vx .logo { text-align: center; font: 800 40px Arial; color: var(--navy); letter-spacing: -2px; margin: 8px 0 2px; }
+.vx .logo b { color: var(--red); }
+.vx .logo small { display: block; font: 600 11px Arial; letter-spacing: 6px; color: var(--navy); }
+.vx h1 { text-align: center; font-weight: 400; font-size: 17px; margin: 8px 0; }
+.vx h1 small { color: #888; }
+.vx button, .vx input, .vx select, .vx textarea { font: inherit; }
+.vx .btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 14px; color: #fff; background: var(--navy); font-weight: 700; margin: 10px 0; cursor: pointer; text-transform: uppercase; }
+.vx .btn.b { background: var(--blue); } .vx .btn.r { background: var(--red); } .vx .btn.o { background: var(--org); color: #fff; } .vx .btn.k { background: #4d4d47; }
+.vx .btn.w { background: #fff; color: var(--navy); border: 2px solid var(--navy); }
+.vx .btn.sm { display: inline-block; width: auto; padding: 10px 14px; margin: 0; }
+.vx .btn:disabled { opacity: .5; }
+.vx .fila2 { display: flex; gap: 8px; margin: 6px 0; }
+.vx .fila2 .btn { flex: 1; font-size: 13px; padding: 12px 6px; margin: 0; }
+.vx .tabs { display: flex; gap: 8px; margin: 8px 0; }
+.vx .tabs button { flex: 1; padding: 10px 4px; font-size: 12px; border-radius: 12px; border: 2px solid var(--navy); background: #fff; color: var(--navy); font-weight: 700; cursor: pointer; text-transform: uppercase; }
+.vx .tabs button.on { background: var(--navy); color: #fff; }
+.vx .dia { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; font-size: 12px; font-weight: 700; color: #444; }
+.vx .dia input { width: auto; margin: 0; padding: 6px 8px; font-size: 13px; border: 1.5px solid #111; border-radius: 8px; }
+.vx .dia button { margin: 0; padding: 7px 12px; font-size: 12px; border-radius: 14px; border: 1px solid #bbb; background: #f3f3f3; font-weight: 700; cursor: pointer; }
+.vx .dia button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.vx .fog { margin: 14px 0; border-radius: 14px; padding-left: 8px; border-left: 6px solid var(--navy); }
+.vx .foh { color: #fff; border-radius: 10px; padding: 7px 12px; font-weight: 800; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.vx .foh span { font-weight: 600; font-size: 12px; text-align: right; }
+.vx .foh .mn { background: rgba(255,255,255,.95); color: #111; border: 0; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; text-transform: none; }
+.vx .card { border: 1.5px solid #111; border-radius: 20px; padding: 14px 18px; margin: 10px 0; cursor: pointer; background: #fff; }
+.vx .card.cerr { opacity: .75; cursor: default; }
+.vx .card .t { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; gap: 8px; }
+.vx .card .g { color: var(--gry); font-size: 14px; margin: 4px 0; }
+.vx .card .v { font-size: 16px; font-weight: 700; margin: 4px 0; } .vx .card .v span { font-weight: 400; color: #555; }
+.vx .card .sm { font-size: 12px; color: #555; }
+.vx .st { font-weight: 700; white-space: nowrap; } .vx .st:before { content: ""; display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: currentColor; margin-right: 8px; vertical-align: -2px; }
+.vx .st.PENDIENTE { color: var(--gry); } .vx .st.PROCESO { color: #f0b400; } .vx .st.CERRADO { color: var(--grn); }
+.vx .pk { font-size: 12px; font-weight: 800; margin-top: 4px; } .vx .pk.ok { color: #00a862; } .vx .pk.ab { color: #d98a00; } .vx .pk.no { color: #7b3fe4; }
+.vx .cn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: #333; background: #f1f3f7; border-radius: 12px; padding: 2px 9px 2px 6px; }
+.vx .cn i { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.35); }
+.vx label { font-size: 13px; font-weight: 700; color: #444; display: block; margin-top: 10px; }
+.vx input, .vx select, .vx textarea { width: 100%; padding: 12px; border: 2px solid #111; border-radius: 10px; margin: 4px 0; background: #fff; }
+.vx input[readonly], .vx input:disabled { background: #d9d9d9; border: 1px solid #777; }
+.vx .top { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+.vx .top .tag { background: #475569; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; }
+.vx .top .btn { margin: 0; width: auto; padding: 12px 16px; }
+.vx .fofase { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--navy); }
+.vx .barra { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin: 12px 0; }
+.vx .barra .pn { background: #4d4d47; color: #fff; border-radius: 10px; padding: 12px 18px; font-weight: 800; text-transform: uppercase; }
+.vx .barra .btn { margin: 0; width: auto; padding: 12px 18px; }
+.vx .barra .btn.w { color: #111; border-color: #999; }
+.vx .hurow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.vx .hurow input { font-size: 17px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; }
+.vx .hurow .btn { margin: 0; padding: 14px 16px; }
+.vx .hint { font-size: 12px; color: #777; margin: 2px 0 8px; }
+.vx .row2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; align-items: end; }
+.vx .row3 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.vx .row3 .btn { margin: 4px 0; height: 50px; padding: 0 8px; font-size: 14px; }
+.vx input.big { font-size: 20px; text-align: center; font-weight: 800; }
+.vx table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+.vx th { background: var(--navy); color: #fff; padding: 10px; text-align: left; font-size: 13px; }
+.vx td { padding: 10px; border-bottom: 1px solid #dde; font-size: 14px; }
+.vx td.d { font-size: 12px; color: #666; }
+.vx .ic { border: 0; background: none; font-size: 18px; cursor: pointer; }
+.vx .msg { border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 700; margin: 6px 0; display: none; }
+.vx .msg.bad { display: block; background: #fdeaea; color: #a30f1b; border: 1px solid #f1b8bd; }
+.vx .msg.ok { display: block; background: #e8f6ee; color: #0a6b3f; }
+.vx .back { text-align: center; margin: 14px 0; } .vx .back a { color: var(--navy); font-weight: 600; cursor: pointer; text-decoration: underline; }
+.vx .pal { border: 1.5px solid #777; padding: 10px; margin: 8px 0; display: flex; justify-content: space-between; font-weight: 700; color: #555; cursor: pointer; border-radius: 8px; }
+.vx .modal-vx { position: fixed; inset: 0; background: #555d; display: none; align-items: center; justify-content: center; z-index: 50; }
+.vx .modal-vx.on { display: flex; }
+.vx .modal-vx > div { background: #fffffb; width: 90%; max-width: 420px; max-height: 85vh; overflow: auto; padding: 22px; border-radius: 10px; }
+#toast-vx { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; padding: 10px 18px; border-radius: 20px; display: none; z-index: 99; font-size: 14px; max-width: 92vw; text-align: center; }
+
+/* ===== Vista de asistentes / administradora ===== */
+.vs .rel { color: #6b7585; font-size: 13px; }
+.vs .tabs-vs { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+.vs .tabs-vs button { padding: 10px 16px; border-radius: 10px; border: 2px solid #0f2150; background: #fff; color: #0f2150; font-weight: 700; cursor: pointer; }
+.vs .tabs-vs button.on { background: #0f2150; color: #fff; }
+.vs .cajas { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.vs .caja { background: #fff; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,30,80,.08); padding: 16px; }
+.vs .caja h4 { margin: 0 0 4px; color: #0f2150; }
+.vs .caja p { margin: 0 0 8px; font-size: 13px; color: #555; }
+.vs .caja input[type=file] { width: 100%; font-size: 13px; margin: 6px 0; }
+.vs .caja .res { font-size: 13px; margin-top: 6px; white-space: pre-wrap; }
+.vs .caja .res.ok { color: #0a6b3f; } .vs .caja .res.bad { color: #a30f1b; }
+.vs .btn-v { display: inline-block; border: 0; border-radius: 10px; padding: 10px 16px; background: #0f2150; color: #fff; font-weight: 700; cursor: pointer; margin: 4px 6px 4px 0; }
+.vs .btn-v.g { background: #e3e8f1; color: #0f2150; } .vs .btn-v:disabled { opacity: .5; cursor: default; }
+.vs .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.vs .kpi { background: #fff; border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,30,80,.08); }
+.vs .kpi b { display: block; font-size: 26px; color: #0f2150; } .vs .kpi span { font-size: 12px; color: #555; }
+.vs .kpi.r b { color: #e30a17; } .vs .kpi.o b { color: #d98a00; } .vs .kpi.g b { color: #00a862; }
+.vs .avisos { background: #fff3dc; border: 1px solid #f0d28a; color: #7a5200; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 8px 0; }
+.vs select { padding: 10px; border-radius: 8px; border: 1.5px solid #c3cbd9; font-size: 14px; min-width: 240px; }
