@@ -74,7 +74,7 @@ const VAL = (function () {
         const mia = f.validador_ref && opt.yo && f.validador_ref === "u:" + opt.yo;
         h += '<div class="card' + (f.estado === "CERRADO" ? " cerr" : "") + '" data-fase="' + E(f.fase) + '" data-est="' + E(f.estado) + '">' +
           '<div class="t"><span>FASE: ' + E(f.fase) + '</span><span class="st ' + claseEstado(f.estado) + '">' + E(f.estado) + "</span></div>" +
-          '<div class="g">SIST: ' + E(f.canal_sistema || "-") + " | " + E(f.canal_fisico || "-") + " " + conoHTML(f.cono) + "</div>" +
+          (f.cliente ? '<div class="sm" style="font-weight:700;color:#333">' + E(f.cliente) + "</div>" : "") + '<div class="g">SIST: ' + E(f.canal_sistema || "-") + " | " + E(f.canal_fisico || "-") + " " + conoHTML(f.cono) + "</div>" +
           (f.validador ? '<div class="v">VALIDADOR: <span>' + E(f.validador) + (mia ? " (tú)" : "") + "</span></div>" : "") +
           (f.inicio ? '<div class="sm">Inicio: ' + E(fmtTs(f.inicio)) + "</div>" : "") +
           (f.fin ? '<div class="sm">Fin: ' + E(fmtTs(f.fin)) + "</div>" : "") +
@@ -248,8 +248,8 @@ const VAL = (function () {
      ====================================================================== */
   const ST = { tab: "fases", S: { fil: "N", dia: "" }, fases: [], esAdmin: false, yo: "", fos: [], ultimo: null };
   const CARGAS = [
-    { id: "DRIVE", t: "Viajes y fases (DRIVE)", d: "Hoja DRIVE o DINAMICA DRIVE: viaje, fase, canal sistema, canal físico y cono.", hojas: ["DRIVE", "DINAMICA DRIVE"] },
-    { id: "MARA", t: "Catálogo MARA", d: "Código, descripción, EAN, UMA. Lo usa el auxiliar al escanear.", hojas: ["MARA"] },
+    { id: "DRIVE", t: "Viajes y fases (carga manual)", d: "Normalmente NO hace falta: el Drive de Despacho se conecta solo (ver pestaña Fases). Úsalo solo si necesitas cargar a mano la hoja DRIVE o L400.", hojas: ["DRIVE", "DINAMICA DRIVE"] },
+    { id: "MARA", t: "Catálogo MARA (mensual)", d: "Se queda guardado y la app trabaja con él hasta que subas el del mes siguiente, que reemplaza al anterior.", hojas: ["MARA"] },
     { id: "STOCK", t: "STOCK ENTREGAS", d: "Export de SAP con las entregas (lo solicitado). Reemplaza lo anterior.", hojas: ["STOCK ENTREGAS", "STOCK"] },
     { id: "MONITOR", t: "MONITOR (entrega → viaje)", d: "Columnas Entrega y Orden de flete (FO). Sirve para ubicar cada entrega en su viaje.", hojas: ["MONITOR"] },
     { id: "PICKING", t: "PICKING", d: "Export de tareas de almacén. Reemplaza solo las fases que vengan en el archivo.", hojas: ["PICKING"] },
@@ -276,8 +276,16 @@ const VAL = (function () {
     const { data, error } = await sb().rpc("val_fases_lista");
     if (error) { c.innerHTML = '<div class="avisos">No se pudo cargar: ' + E(error.message) + "</div>"; return; }
     ST.fases = data || [];
+    let banner = "";
+    try {
+      const { data: cf } = await sb().from("val_config").select("clave,valor").in("clave", ["drive_ultima_sync", "drive_resumen"]), m = {}; (cf || []).forEach(x => m[x.clave] = x.valor);
+      if (m.drive_ultima_sync) {
+        const min = Math.round((Date.now() - new Date(m.drive_ultima_sync).getTime()) / 60000), viejo = min > 30;
+        banner = '<div class="avisos" style="' + (viejo ? "" : "background:#e8f6ee;border-color:#b9e3c9;color:#0a6b3f") + '">' + (viejo ? "⚠ " : "🔄 ") + "Drive de Despacho: última sincronización hace " + (min < 1 ? "menos de 1 minuto" : min < 90 ? min + " min" : Math.round(min / 60) + " h") + (m.drive_resumen ? " · " + E(m.drive_resumen) : "") + (viejo ? ". Revisa que el activador del Apps Script siga activo." : "") + "</div>";
+      } else banner = '<div class="avisos">El Drive de Despacho aún no está conectado. Sigue los pasos de «sincronizar_drive.gs», o sube la hoja DRIVE en «Cargar datos».</div>';
+    } catch (e) { /* sin banner */ }
     const pintar = () => {
-      c.innerHTML = '<div class="vx" style="max-width:640px">' + barraFiltros(ST.fases, ST.S) + listaHTML(ST.fases, ST.S, { staff: true, yo: ST.yo }) + "</div>";
+      c.innerHTML = banner + '<div class="vx" style="max-width:640px">' + barraFiltros(ST.fases, ST.S) + listaHTML(ST.fases, ST.S, { staff: true, yo: ST.yo }) + "</div>";
       enlazarFiltros(c, ST.S, pintar);
       c.querySelectorAll("[data-cruce]").forEach(b => b.onclick = ev => { ev.stopPropagation(); ST.tab = "cruce"; ST.fo = b.dataset.cruce; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
       c.querySelectorAll("[data-reabrir]").forEach(b => b.onclick = async ev => {
@@ -312,6 +320,7 @@ const VAL = (function () {
       CARGAS.map(x => '<div class="caja"><h4>' + E(x.t) + "</h4><p>" + E(x.d) + '</p><input type="file" accept=".xlsx,.xls,.csv" data-f="' + x.id + '">' +
         (x.id === "PICKING" ? '<label style="font-size:12px"><input type="checkbox" id="chk-reemp"> También reemplazar fases ya confirmadas</label><br>' : "") +
         '<button class="btn-v" data-go="' + x.id + '" disabled>Cargar</button><div class="res" id="res-' + x.id + '"></div></div>').join("") + "</div>";
+    estadoCargas(c);
     const archivos = {};
     c.querySelectorAll("[data-f]").forEach(inp => inp.onchange = async () => {
       const id = inp.dataset.f, def = CARGAS.find(x => x.id === id), res = q("#res-" + id), btn = c.querySelector('[data-go="' + id + '"]'); btn.disabled = true; archivos[id] = null;
@@ -331,10 +340,28 @@ const VAL = (function () {
     });
   }
   const CARGAS_PARSE = window.CARGAS;
+  // "Actualmente en la app: N registros" en cada tarjeta de carga
+  async function estadoCargas(c) {
+    const tablas = { DRIVE: "val_fases", MARA: "val_mara", STOCK: "val_esperado", MONITOR: "val_monitor", PICKING: "val_picking", USUARIOS: "val_picadores" }, ETQ = { DRIVE: "fases", MARA: "productos", STOCK: "líneas", MONITOR: "entregas", PICKING: "tareas", USUARIOS: "usuarios" };
+    let fMara = "";
+    try { const { data } = await sb().from("val_config").select("valor").eq("clave", "mara_ultima_carga").limit(1); if (data && data[0]) fMara = fmtTs(data[0].valor).slice(0, 10); } catch (e) {}
+    for (const id of Object.keys(tablas)) {
+      try {
+        const { count, error } = await sb().from(tablas[id]).select("*", { count: "exact", head: true }); if (error) throw error;
+        const b = c.querySelector('[data-go="' + id + '"]'); if (!b) continue;
+        const d = document.createElement("div"); d.className = "rel"; d.style.cssText = "margin:4px 0 0;font-size:12px;font-weight:700";
+        d.textContent = "En la app ahora: " + count + " " + ETQ[id] + (id === "MARA" && fMara ? " · cargado el " + fMara : ""); b.parentNode.insertBefore(d, b.nextSibling);
+      } catch (e) { /* sin dato */ }
+    }
+  }
   const CARGADORES = {
     async MARA(filas, prog) {
       await porLotes(filas, 500, async lote => { const { error } = await sb().from("val_mara").upsert(lote, { onConflict: "codigo" }); if (error) throw error; }, (a, b) => prog("MARA: " + a + " de " + b + "…"));
-      return "MARA: " + filas.length + " productos cargados.";
+      // el catálogo nuevo reemplaza al anterior: se quitan los códigos que ya no vienen
+      const nuevos = new Set(filas.map(f => f.codigo)), viejos = await leerTodo((a, b) => sb().from("val_mara").select("codigo").order("codigo").range(a, b)), sobran = viejos.map(v => v.codigo).filter(c => !nuevos.has(c));
+      await porLotes(sobran, 150, async lote => { const { error } = await sb().from("val_mara").delete().in("codigo", lote); if (error) throw error; });
+      await sb().from("val_config").upsert({ clave: "mara_ultima_carga", valor: new Date().toISOString(), actualizado: new Date().toISOString() }, { onConflict: "clave" });
+      return "MARA: " + filas.length + " productos vigentes" + (sobran.length ? " (se quitaron " + sobran.length + " códigos del catálogo anterior)" : "") + ". La app trabajará con este catálogo hasta que subas el próximo.";
     },
     async DRIVE(filas) {
       const ex = await leerTodo((a, b) => sb().from("val_fases").select("fase,estado,fo,canal_sistema,canal_fisico,cono").order("fase").range(a, b)), M = {}; ex.forEach(f => M[f.fase] = f);
