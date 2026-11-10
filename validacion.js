@@ -68,7 +68,7 @@ const VAL = (function () {
     Object.keys(porFo).forEach(fo => {
       const delFo = todas.filter(f => (f.fo || "SIN VIAJE") === fo), k = delFo.filter(f => f.pk === "CONFIRMADA").length, color = COLORES[orden.indexOf(fo) % COLORES.length];
       h += '<div class="fog" style="border-left-color:' + color + '"><div class="foh" style="background:' + color + '"><b>FO: ' + E(fo) + "</b>" +
-        (opt.staff ? '<button class="mn" data-cruce="' + E(fo) + '">📥 Cruce</button>' : "") +
+        (opt.staff ? (delFo.some(f => f.lineas_stock > 0) ? '<button class="mn" data-cruce="' + E(fo) + '">📥 Cruce</button>' : '<button class="mn" data-sinstock="1" style="background:#fff3dc;color:#7a5200">⚠ Sube el STOCK ENTREGA</button>') : "") +
         "<span>" + delFo.length + " fase" + (delFo.length === 1 ? "" : "s") + " · " + k + "/" + delFo.length + " con picking confirmado</span></div>";
       porFo[fo].forEach(f => {
         const mia = f.validador_ref && opt.yo && f.validador_ref === "u:" + opt.yo;
@@ -79,7 +79,9 @@ const VAL = (function () {
           (f.inicio ? '<div class="sm">Inicio: ' + E(fmtTs(f.inicio)) + "</div>" : "") +
           (f.fin ? '<div class="sm">Fin: ' + E(fmtTs(f.fin)) + "</div>" : "") +
           (f.paletas ? '<div class="sm" style="font-weight:700;color:#111">📦 ' + f.paletas + " paletas · " + f.bultos + " bultos registrados</div>" : "") +
+          (opt.staff ? (f.lineas_stock > 0 ? '<div class="pk ok">📦 STOCK ENTREGA CARGADO · ' + f.lineas_stock + " líneas</div>" : '<div class="pk ab">📦 SIN STOCK ENTREGA · falta subirlo en «Cargar datos»</div>') : "") +
           pkHTML(f) +
+          (opt.staff && opt.admin ? '<div style="margin-top:6px"><button class="mn" data-eliminar="' + E(f.fase) + '" style="border:1px solid #e3a5a9;border-radius:8px;background:#fdeaea;color:#a30f1b;padding:6px 10px;font-weight:700;cursor:pointer">🗑 Eliminar fase</button></div>' : "") +
           (opt.staff && f.estado === "CERRADO" ? '<div style="margin-top:6px"><button class="mn" data-reabrir="' + E(f.fase) + '" style="border:1px solid #bbb;border-radius:8px;background:#f3f3f3;padding:6px 10px;font-weight:700;cursor:pointer">↩ Reabrir</button></div>' : "") +
           "</div>";
       });
@@ -285,9 +287,17 @@ const VAL = (function () {
       } else banner = '<div class="avisos">El Drive de Despacho aún no está conectado. Sigue los pasos de «sincronizar_drive.gs», o sube la hoja DRIVE en «Cargar datos».</div>';
     } catch (e) { /* sin banner */ }
     const pintar = () => {
-      c.innerHTML = banner + '<div class="vx" style="max-width:640px">' + barraFiltros(ST.fases, ST.S) + listaHTML(ST.fases, ST.S, { staff: true, yo: ST.yo }) + "</div>";
+      c.innerHTML = banner + '<div class="vx" style="max-width:640px">' + barraFiltros(ST.fases, ST.S) + listaHTML(ST.fases, ST.S, { staff: true, yo: ST.yo, admin: ST.esAdmin }) + "</div>";
       enlazarFiltros(c, ST.S, pintar);
       c.querySelectorAll("[data-cruce]").forEach(b => b.onclick = ev => { ev.stopPropagation(); ST.tab = "cruce"; ST.fo = b.dataset.cruce; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
+      c.querySelectorAll("[data-sinstock]").forEach(b => b.onclick = ev => { ev.stopPropagation(); alert("Este viaje todavía no tiene STOCK ENTREGA cargado, así que no se puede cruzar. " + (ST.esAdmin ? "Ve a «Cargar datos» y sube el STOCK ENTREGA." : "Pídele a la administradora que lo suba.")); if (!ST.esAdmin) return; ST.tab = "cargar"; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
+      c.querySelectorAll("[data-eliminar]").forEach(b => b.onclick = async ev => {
+        ev.stopPropagation();
+        const fa = b.dataset.eliminar;
+        if (!confirm("¿Estás segura de eliminar la fase " + fa + "?\n\nSe borrarán también su stock, su picking, lo contado por los auxiliares y sus comentarios. No se puede deshacer.")) return;
+        const { error: e3 } = await sb().rpc("val_fase_eliminar", { p_fase: fa });
+        if (e3) return alert(e3.message); toast("Fase eliminada"); staffFases(c);
+      });
       c.querySelectorAll("[data-reabrir]").forEach(b => b.onclick = async ev => {
         ev.stopPropagation();
         if (!confirm("¿Reabrir la fase " + b.dataset.reabrir + "? Volverá a estar EN PROCESO.")) return;
@@ -448,7 +458,9 @@ const VAL = (function () {
     const fo = q("#cr-fo").value, out = q("#cr-out"); if (!fo) return;
     ST.fo = fo; out.innerHTML = '<p class="rel">Calculando…</p>';
     try {
-      const res = window.CRUCE.cruceFO(await datosFO(fo)); ST.ultimo = res; const r = res.resumen;
+      const dat = await datosFO(fo);
+      if (!dat.stock.length) { out.innerHTML = '<div class="avisos">⚠ Este viaje no tiene STOCK ENTREGA cargado, así que no se puede cruzar. ' + (ST.esAdmin ? "Súbelo en «Cargar datos»." : "Pídele a la administradora que lo suba.") + "</div>"; return; }
+      const res = window.CRUCE.cruceFO(dat); ST.ultimo = res; const r = res.resumen;
       out.innerHTML = '<div class="kpis"><div class="kpi"><b>' + r.codigos + '</b><span>códigos del viaje</span></div><div class="kpi g"><b>' + r.cuadrados + '</b><span>cuadrados</span></div>' +
         '<div class="kpi r"><b>' + r.faltantes + '</b><span>faltantes</span></div><div class="kpi o"><b>' + r.sobrantes + '</b><span>sobrantes</span></div>' +
         '<div class="kpi"><b>' + r.noPertenece + '</b><span>no pertenecen</span></div><div class="kpi"><b>' + r.pendientes + '</b><span>sin registrar</span></div>' +
