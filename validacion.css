@@ -125,3 +125,34 @@
 .filtros-vs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }
 .vx .tbl-stock th { font-size: 12px; padding: 8px 6px; } .vx .tbl-stock td { padding: 8px 6px; font-size: 13px; }
 .vx .reab { border: 1px solid #0f2150; background: #fff; color: #0f2150; border-radius: 16px; padding: 5px 12px; font-weight: 700; cursor: pointer; margin-top: 8px; font-size: 13px; }
+
+/* ===== Pantalla de validación del auxiliar: mismo orden, mejor aspecto ===== */
+input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+#vista-aux { background: linear-gradient(180deg, #eef2fb 0, #f7f9fd 220px, #fff 100%); }
+.vx .top { position: sticky; top: 0; z-index: 10; background: rgba(238,242,251,.96); backdrop-filter: blur(6px); padding: 8px 2px; margin: -8px -2px 0; }
+.vx .top .tag { background: var(--navy); border-radius: 20px; padding: 8px 12px; display: inline-flex; gap: 8px; align-items: center; box-shadow: 0 2px 6px rgba(15,33,80,.25); }
+.vx .top .btn.r { box-shadow: 0 3px 8px rgba(227,10,23,.35); letter-spacing: .3px; }
+.vx .fofase { background: #fff; border: 1px solid #dfe5f2; border-radius: 12px; padding: 9px 14px; margin: 10px 0; box-shadow: 0 1px 3px rgba(15,33,80,.06); }
+.vx .barra .pn { background: linear-gradient(135deg, #0f2150, #1c3a8a); box-shadow: 0 3px 8px rgba(15,33,80,.3); letter-spacing: .5px; }
+.vx .barra .btn { box-shadow: 0 2px 6px rgba(0,0,0,.12); font-size: 13px; }
+.vx .paso { background: #fff; border: 1.5px solid #dfe5f2; border-left: 6px solid var(--navy); border-radius: 16px; padding: 4px 14px 12px; margin: 12px 0; box-shadow: 0 1px 4px rgba(15,33,80,.07); transition: border-color .15s, box-shadow .15s; }
+.vx .paso:focus-within { border-color: var(--blue); border-left-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,74,173,.15); }
+.vx .paso input:not([readonly]):focus { outline: none; border-color: var(--blue); }
+.vx .paso label { color: var(--navy); text-transform: uppercase; font-size: 12px; letter-spacing: .4px; }
+.vx input[readonly] { background: #eef1f6; border: 1px solid #c9d0de; color: #223; font-weight: 700; }
+.vx .btn { box-shadow: 0 2px 6px rgba(15,33,80,.18); transition: transform .05s; } .vx .btn:active { transform: scale(.98); }
+.vx input.big { font-size: 26px; letter-spacing: 1px; }
+.vx table { border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 1px 4px rgba(15,33,80,.08); }
+.vx tr:nth-child(even) td { background: #f8f9fd; }
+.vx #x-fpal { background: linear-gradient(135deg, #00a862, #00854e); font-size: 16px; padding: 16px; }
+.vx .back a { display: inline-block; background: #fff; border: 1.5px solid var(--navy); border-radius: 24px; padding: 10px 22px; text-decoration: none; }
+
+/* Vista STOCK ENTREGAS (personal): comentario cómodo */
+.tbl-vs tr:nth-child(even) td { background: #f8f9fd; }
+.tbl-vs td.com { min-width: 360px; }
+.tbl-vs .comrow { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; align-items: center; }
+.tbl-vs .comrow input { width: 100%; box-sizing: border-box; margin: 0; }
+.tbl-vs .comrow .btn-v { margin: 0; padding: 8px 12px; }
+.tbl-vs .comrow.sin-n { grid-template-columns: 1fr auto; }
+.tbl-vs .quien { font-size: 11px; color: #6b7585; margin-top: 3px; }
