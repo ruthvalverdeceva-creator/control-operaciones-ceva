@@ -272,9 +272,10 @@ const VAL = (function () {
     r.innerHTML = marco('<h1 style="font-weight:700;margin:6px 0">REGISTROS</h1><div class="fofase" style="text-align:center;color:#111">FO: ' + E(i.fo || "-") + " · FASE: " + E(V.fase) + '</div><div style="text-align:center;color:#666;font-size:14px">SIST: ' + E(i.canal_sistema || "-") + " | " + E(i.canal_fisico || "-") + "</div>" +
       '<div class="tabs"><button data-rt="FASE" class="' + (tab === "FASE" ? "on" : "") + '">Esta fase</button><button data-rt="FO" class="' + (tab === "FO" ? "on" : "") + '">Total FO</button><button data-rt="PAL" class="' + (tab === "PAL" ? "on" : "") + '">Paletas</button>' + (i.estado === "CERRADO" ? '<button data-rt="REP" class="' + (tab === "REP" ? "on" : "") + '">Reporte</button>' : "") + "</div>" +
       pk + '<div id="rg-cuerpo"><p style="text-align:center;color:#777">Cargando…</p></div>' +
-      '<div class="fixbar"><a id="rg-volver">🏠 Volver al menú</a></div><div style="height:50px"></div>');
+      '<div class="fixbar">' + (V.soloVer || i.estado === "CERRADO" ? "" : '<a id="rg-seguir" class="seg">↩ Seguir validando</a>') + '<a id="rg-volver">🏠 Volver al menú</a></div><div style="height:50px"></div>');
     r.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => auxRegistros(b.dataset.rt));
-    q("#rg-volver").onclick = () => { V.tabReg = "FASE"; V.ed = null; if (V.soloVer) { AX.V = null; auxLista(true); } else auxPintarValidar(); };
+    const sg = q("#rg-seguir"); if (sg) sg.onclick = () => { V.tabReg = "FASE"; V.ed = null; auxPintarValidar(); };
+    q("#rg-volver").onclick = () => { if (V.items && V.items.length && !confirm("Tienes productos sin guardar en la paleta que estabas armando. ¿Salir de todos modos?")) return; AX.V = null; auxLista(true); };
     if (tab === "PAL") return auxPaletasEditor();
     if (tab === "REP") return auxReporte();
     const { data, error } = await sb().rpc("val_estado_codigos", { p_fase: V.fase, p_vista: tab });
@@ -303,11 +304,16 @@ const VAL = (function () {
       (filas.map(x => "<tr><td><b>" + E(x.codigo) + '</b><div class="d">' + E(x.descripcion || "") + "</div></td><td>" + E(x.un || "") + "</td><td>" + x.solicitado + "</td><td><b>" + x.contado + "</b></td><td style='font-weight:800;color:" + (x.diferencia < 0 ? "#e30a17" : x.diferencia > 0 ? "#d98a00" : "#00a862") + "'>" + (x.diferencia > 0 ? "+" : "") + x.diferencia + '</td><td style="font-weight:800;color:' + (ESTADO_COLOR[x.status] || "#333") + '">' + E(x.status) + '</td><td class="d" style="min-width:140px">' + E(x.comentario || "") + "</td></tr>").join("") || '<tr><td colspan="7" style="color:#888">Sin filas.</td></tr>') + "</table></div>";
   }
   function auxPaletasEditor() {
-    const V = AX.V, cu = q("#rg-cuerpo");
-    if (!V.ed) V.ed = V.paletas.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: x.cant })), nc: "", nq: "", msg: "" }));
+    const V = AX.V;
+    editorPaletas(q("#rg-cuerpo"), { fase: V.fase, paletas: V.paletas, st: V, editable: !(V.soloVer || V.info.estado === "CERRADO"), recargar: async () => { await auxCargarPaletas(); auxRegistros("PAL"); } });
+  }
+  /* Editor de paletas (lo usan el validador antes de cerrar y el personal en cualquier momento) */
+  function editorPaletas(cu, ctx) {
+    const V = ctx.st;
+    if (!V.ed) V.ed = ctx.paletas.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: x.cant })), nc: "", nq: "", msg: "" }));
     const tot = p => p.items.reduce((t, x) => t + (Number(x.cant) || 0), 0);
-    if (V.soloVer || V.info.estado === "CERRADO") {
-      cu.innerHTML = (V.paletas.length ? V.paletas.map(p => '<div class="palc"><div class="ph"><b>PALETA ' + p.paleta + "</b><b>" + tot(p) + ' bultos</b></div><div style="font-weight:800;margin-bottom:4px">HU ' + E(p.hu) + "</div>" +
+    if (!ctx.editable) {
+      cu.innerHTML = (ctx.paletas.length ? ctx.paletas.map(p => '<div class="palc"><div class="ph"><b>PALETA ' + p.paleta + "</b><b>" + tot(p) + ' bultos</b></div><div style="font-weight:800;margin-bottom:4px">HU ' + E(p.hu) + "</div>" +
         p.items.map(x => '<div class="it" style="grid-template-columns:1fr auto"><div><b>' + E(x.codigo) + "</b><small>" + E(x.desc) + "</small></div><b style='font-size:18px'>" + x.cant + "</b></div>").join("") + "</div>").join("") : '<p style="text-align:center;color:#777">Todavía no hay paletas guardadas.</p>');
       return;
     }
@@ -337,15 +343,15 @@ const VAL = (function () {
         if (!p.hu) { p.msg = "La paleta necesita un HU (o escribe SN)."; return pintar(); }
         if (!p.items.length) {
           if (!confirm("La paleta " + p.paleta + " quedó sin productos. ¿Borrarla completa?")) return;
-          const { error } = await sb().rpc("val_borrar_paleta", { p_fase: V.fase, p_paleta: p.paleta });
+          const { error } = await sb().rpc("val_borrar_paleta", { p_fase: ctx.fase, p_paleta: p.paleta });
           if (error) { p.msg = error.message; return pintar(); }
-          toast("Paleta " + p.paleta + " borrada"); V.ed = null; await auxCargarPaletas(); return auxRegistros("PAL");
+          toast("Paleta " + p.paleta + " borrada"); V.ed = null; return ctx.recargar();
         }
         if (malos) { p.msg = "Todas las cantidades deben ser enteros mayores a 0."; return pintar(); }
         e.disabled = true;
-        const { error } = await sb().rpc("val_guardar_paleta", { p_fase: V.fase, p_paleta: p.paleta, p_hu: p.hu, p_items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: Number(x.cant) })), p_motivo: "Corrección del validador" });
+        const { error } = await sb().rpc("val_guardar_paleta", { p_fase: ctx.fase, p_paleta: p.paleta, p_hu: p.hu, p_items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: Number(x.cant) })), p_motivo: ctx.motivo || "Corrección del validador" });
         if (error) { p.msg = error.message; return pintar(); }
-        toast("Paleta " + p.paleta + " guardada ✔"); V.ed = null; await auxCargarPaletas(); auxRegistros("PAL");
+        toast("Paleta " + p.paleta + " guardada ✔"); V.ed = null; ctx.recargar();
       });
     };
     pintar();
@@ -563,7 +569,7 @@ const VAL = (function () {
   async function datosFO(fo) {
     const por = (t, cols, col, ord) => leerTodo((a, b) => sb().from(t).select(cols).eq(col, fo).order(ord || "id").range(a, b));
     const [fases, stock0, regs0, com] = await Promise.all([
-      por("val_fases", "fase,fo,canal_sistema,canal_fisico,cono,estado,inicio,fin,validador,cliente,transportista,placa,asistente_despacho,rampa,destino", "fo", "fase"), por("val_esperado", "id,fase,material,descripcion,un,cantidad", "fo"),
+      por("val_fases", "fase,fo,canal_sistema,canal_fisico,cono,estado,inicio,fin,validador,cliente,transportista,placa,asistente_despacho,rampa,destino,llegada_ut", "fo", "fase"), por("val_esperado", "id,fase,material,descripcion,un,cantidad", "fo"),
       por("val_registros", "id,fase,paleta,hu,codigo,descripcion,cantidad,creado", "fo"), por("val_comentarios", "fase,codigo,comentario,usuario,actualizado", "fo", "fase")]);
     const fasesIds = fases.map(f => f.fase);
     let pick = await por("val_picking", "id,fase,status,hu,producto,descripcion,ctd_prev,ctd_real,confirmado_por,fecha_conf,hora_conf", "fo");
@@ -627,9 +633,10 @@ const VAL = (function () {
           const pal = Object.values(P).sort((a, b) => a.paleta - b.paleta), tot = regs.reduce((t0, r) => t0 + r.cantidad, 0);
           let est = []; try { const r2 = await sb().rpc("val_vista_stock", { p_fase: fase, p_vista: "FASE" }); est = r2.data || []; } catch (e) {}
           cu.innerHTML = '<div class="kpis"><div class="kpi"><b>' + pal.length + '</b><span>paletas registradas</span></div><div class="kpi"><b>' + tot + '</b><span>bultos contados</span></div><div class="kpi"><b>' + new Set(regs.map(r => r.codigo)).size + '</b><span>códigos distintos</span></div></div>' +
-            (pal.length ? '<div class="cajas">' + pal.map(p => '<div class="caja"><h4>PALETA ' + p.paleta + " · " + p.items.reduce((t0, x) => t0 + x.cantidad, 0) + ' bultos</h4><p><b>HU:</b> ' + E(p.hu) + (p.t ? " · " + E(fmtTs(p.t)) : "") + "</p>" + p.items.map(x => "<div style='display:flex;justify-content:space-between;gap:8px;border-top:1px solid #e5e8ef;padding:4px 0'><span><b>" + E(x.codigo) + "</b><br><span class='rel' style='font-size:11px'>" + E(x.descripcion || "") + "</span></span><b>" + x.cantidad + "</b></div>").join("") + "</div>").join("") + "</div>" : '<div class="avisos">El validador todavía no ha registrado paletas en esta fase.</div>') +
+            (pal.length ? '<p class="rel">Puedes <b>corregir cualquier paleta</b> (HU, cantidades, agregar o quitar códigos) aunque la validación ya esté cerrada. Cada cambio queda registrado.</p><div id="fd-pal" class="vx cajas"></div>' : '<div class="avisos">El validador todavía no ha registrado paletas en esta fase.</div>') +
             '<h4 style="margin:18px 0 6px">Cantidad total que debe tener la fase, por código</h4>' +
             '<div class="filtros-vs"><input type="text" id="fd-q" placeholder="🔎 Buscar por código o descripción" style="min-width:260px"><button class="btn-v g" id="fd-act" style="margin:0">🔄 Actualizar</button><label style="display:inline-flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="fd-dif"> Solo diferencias</label><span class="rel" id="fd-n"></span></div><div id="fd-est"></div>';
+          if (pal.length) editorPaletas(q("#fd-pal"), { fase, paletas: pal.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.descripcion || "", cant: x.cantidad })) })), st: {}, editable: true, motivo: "Corrección de la asistente/administradora", recargar: () => abrir("reg") });
           const pintarEst = () => {
             const t = (q("#fd-q").value || "").toUpperCase().trim(), dif = q("#fd-dif").checked;
             const fl = est.filter(x => (!t || (String(x.codigo) + " " + (x.descripcion || "")).toUpperCase().includes(t)) && (!dif || x.status !== "CUADRADO"));
@@ -656,19 +663,44 @@ const VAL = (function () {
   const fmtDT = d => d ? String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + ":" + String(d.getSeconds()).padStart(2, "0") : "";
   function encabezadoFases(dat, soloFase) {
     const fs = dat.fases.filter(f => !soloFase || window.CRUCE.clean(f.fase) === window.CRUCE.clean(soloFase));
-    const cab = ["FASE", "CANAL SISTEMA", "CANAL FÍSICO", "CONO", "TRANSPORTE", "PLACA", "ASISTENTE DESPACHO", "VALIDADOR", "INICIO PREPARACIÓN", "FIN PREPARACIÓN", "INICIO VALIDACIÓN", "FIN VALIDACIÓN"];
+    const cab = ["FASE", "CLIENTE", "DESTINO", "TRANSPORTE", "PLACA", "LLEGADA TRANSPORTE", "CANAL SISTEMA", "CANAL FÍSICO", "CONO", "ASISTENTE DESPACHO", "VALIDADOR", "INICIO PREPARACIÓN", "FIN PREPARACIÓN", "INICIO VALIDACIÓN", "FIN VALIDACIÓN"];
     const filas = fs.map(f => {
       const ts = dat.pick.filter(r => window.CRUCE.clean(r.fase) === window.CRUCE.clean(f.fase) && String(r.status || "").toUpperCase() === "C").map(r => fechaDT(r.fecha_conf, r.hora_conf)).filter(Boolean).sort((a, b) => a - b);
-      return [String(f.fase), f.canal_sistema || "", f.canal_fisico || "", f.cono || "", f.transportista || "", f.placa || "", f.asistente_despacho || "", f.validador || "", fmtDT(ts[0]), fmtDT(ts[ts.length - 1]), f.inicio ? fmtDT(new Date(f.inicio)) : "", f.fin ? fmtDT(new Date(f.fin)) : ""];
+      return [String(f.fase), f.cliente || "", f.destino || "", f.transportista || "", f.placa || "", f.llegada_ut || "", f.canal_sistema || "", f.canal_fisico || "", f.cono || "", f.asistente_despacho || "", f.validador || "", fmtDT(ts[0]), fmtDT(ts[ts.length - 1]), f.inicio ? fmtDT(new Date(f.inicio)) : "", f.fin ? fmtDT(new Date(f.fin)) : ""];
     });
     return { cab, filas };
   }
-  function xlsConEncabezado(nombre, hoja, titulo, dat, soloFase, cabTabla, filas, anchos) {
-    const e = encabezadoFases(dat, soloFase), n = Math.max(e.cab.length, cabTabla.length);
-    const aoa = [[titulo], [], e.cab].concat(e.filas, [[]], [cabTabla], filas);
-    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = Array.from({ length: n }, (_, i) => ({ wch: Math.max(anchos[i] || 10, (e.cab[i] || "").length + 2, 14) }));
-    XLSX.utils.book_append_sheet(wb, ws, hoja); XLSX.writeFile(wb, nombre); toast("Excel descargado ✔");
+  const CONO_RGB = { AMARILLO: "FFD84D", VERDE: "3DBE6B", AZUL: "2F6FDE", ROJO: "E30A17", NARANJA: "FF8A00", MORADO: "8E5BE8", CELESTE: "6EC6F0", FUCSIA: "E83E8C", ROSADO: "F7A8C8", ROSA: "F7A8C8", NEGRO: "222222", BLANCO: "FFFFFF", GRIS: "9AA3B2", MARRON: "8B5E3C", PLOMO: "9AA3B2", CAFE: "8B5E3C" };
+  async function xlsConEncabezado(nombre, hoja, titulo, dat, soloFase, cabTabla, filas, anchos) {
+    const e = encabezadoFases(dat, soloFase);
+    if (!window.ExcelJS) { const ar = [[titulo], [], e.cab].concat(e.filas, [[]], [cabTabla], filas), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ar), hoja); XLSX.writeFile(wb, nombre); return toast("Excel descargado ✔"); }
+    const NAVY = "FF0F2150", BLUE = "FF004AAD", RED = "FFE30A17", PALE = "FFEAF1FB", ZEBRA = "FFF6F8FC", ncol = Math.max(e.cab.length, cabTabla.length);
+    const fino = { style: "thin", color: { argb: "FFC3CBD9" } }, borde = { top: fino, left: fino, bottom: fino, right: fino };
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(hoja.slice(0, 31), { views: [{ showGridLines: false }] });
+    const fill = argb => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+    // 1) Título CEVA
+    ws.mergeCells(1, 1, 1, ncol); const t = ws.getCell(1, 1); t.value = "CEVA LOGISTICS · LATAM 400 · " + titulo; t.font = { name: "Arial", bold: true, size: 16, color: { argb: "FFFFFFFF" } }; t.fill = fill(NAVY); t.alignment = { vertical: "middle", horizontal: "left", indent: 1 }; ws.getRow(1).height = 32;
+    ws.mergeCells(2, 1, 2, ncol); ws.getCell(2, 1).fill = fill(RED); ws.getRow(2).height = 5;
+    ws.mergeCells(3, 1, 3, ncol); const g = ws.getCell(3, 1); g.value = "Generado el " + fmtDT(new Date()) + " · Control de Operaciones · Validación Outbound"; g.font = { name: "Arial", size: 9, italic: true, color: { argb: "FF6B7585" } }; ws.getRow(3).height = 16;
+    // 2) Datos de la fase (despacho, preparación y validación)
+    let r = 4; const hr = ws.getRow(r); e.cab.forEach((c, i) => { const x = hr.getCell(i + 1); x.value = c; x.font = { name: "Arial", bold: true, size: 10, color: { argb: "FFFFFFFF" } }; x.fill = fill(BLUE); x.alignment = { horizontal: "center", vertical: "middle", wrapText: true }; x.border = borde; }); hr.height = 30;
+    e.filas.forEach(fr => { r++; const row = ws.getRow(r); fr.forEach((v, i) => { const x = row.getCell(i + 1); x.value = v; x.font = { name: "Arial", size: 10, bold: i === 0 || i === 10 }; x.fill = fill(PALE); x.border = borde; x.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      if (e.cab[i] === "CONO" && v) { const rgb = CONO_RGB[String(v).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim()]; if (rgb) { x.fill = fill("FF" + rgb); const claro = ["FFD84D", "FFFFFF", "F7A8C8", "6EC6F0", "9AA3B2"].includes(rgb); x.font = { name: "Arial", size: 10, bold: true, color: { argb: claro ? "FF222222" : "FFFFFFFF" } }; } } }); row.height = 22; });
+    r += 2;
+    // 3) Tabla de datos
+    const th = ws.getRow(r); cabTabla.forEach((c, i) => { const x = th.getCell(i + 1); x.value = c; x.font = { name: "Arial", bold: true, size: 10, color: { argb: "FFFFFFFF" } }; x.fill = fill(NAVY); x.alignment = { horizontal: "center", vertical: "middle", wrapText: true }; x.border = { top: fino, left: fino, right: fino, bottom: { style: "medium", color: { argb: RED } } }; }); th.height = 28;
+    const hdrRow = r;
+    filas.forEach((fr, k) => { r++; const row = ws.getRow(r); fr.forEach((v, i) => { const x = row.getCell(i + 1); x.value = v; x.font = { name: "Arial", size: 10 }; x.border = borde; if (k % 2) x.fill = fill(ZEBRA); x.alignment = { vertical: "middle", wrapText: typeof v === "string" && v.length > 40 };
+      const cb = String(cabTabla[i] || "").toUpperCase();
+      if (cb === "DIFERENCIA" && typeof v === "number") x.font = { name: "Arial", size: 10, bold: true, color: { argb: v < 0 ? "FFE30A17" : v > 0 ? "FFD98A00" : "FF00A862" } };
+      if (cb === "STATUS" || cb === "ESTADO") { const col = { CUADRADO: "FF00A862", FALTANTE: "FFE30A17", SOBRANTE: "FFD98A00", PENDIENTE: "FF666666", "NO PERTENECE": "FF7B3FE4", AJUSTE: "FF0A8F8F", CONFIRMADA: "FF00A862", ABIERTA: "FFD98A00" }[String(v).toUpperCase()]; if (col) x.font = { name: "Arial", size: 10, bold: true, color: { argb: col } }; }
+      if (cb.indexOf("HU EN CONTEO") === 0) x.font = { name: "Arial", size: 10, bold: true, color: { argb: v === "Sí" ? "FF00A862" : v === "No" ? "FFE30A17" : "FF999999" } }; }); });
+    ws.autoFilter = { from: { row: hdrRow, column: 1 }, to: { row: hdrRow, column: cabTabla.length } };
+    ws.views = [{ state: "frozen", ySplit: hdrRow, showGridLines: false }];
+    for (let i = 0; i < ncol; i++) ws.getColumn(i + 1).width = Math.min(48, Math.max(anchos[i] || 10, i < e.cab.length ? 16 : 10));
+    ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    const buf = await wb.xlsx.writeBuffer(), blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); toast("Excel descargado ✔");
   }
   function staffVista(res, dat) { if (ST.vista === "pick") staffVistaPicking(res, dat); else staffVistaStock(res, dat); }
   function xlsSimple(nombre, hoja, aoa, anchos) { const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = anchos.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, hoja); XLSX.writeFile(wb, nombre); toast("Excel descargado ✔"); }
