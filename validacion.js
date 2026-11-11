@@ -57,11 +57,11 @@ const VAL = (function () {
   }
   function accionesHTML(f, admin) {
     const it = [];
-    if (f.estado === "CERRADO") it.push('<button data-reabrir="' + E(f.fase) + '">↩ Reabrir fase</button>');
     if (admin && f.paletas > 0) it.push('<button data-borrarreg="' + E(f.fase) + '">🧹 Borrar registros contados</button>');
     if (admin && f.pk !== "SIN PICKING") it.push('<button data-borrarpk="' + E(f.fase) + '">🧹 Borrar picking</button>');
     if (admin) it.push('<button class="pelig" data-eliminar="' + E(f.fase) + '">🗑 Eliminar fase</button>');
-    return it.length ? '<details class="acc" onclick="event.stopPropagation()"><summary>⚙ Acciones</summary><div class="acc-menu">' + it.join("") + "</div></details>" : "";
+    const reab = f.estado === "CERRADO" ? '<button class="reab" data-reabrir="' + E(f.fase) + '">↩ Reabrir fase</button> ' : "";
+    return reab + (it.length ? '<details class="acc" onclick="event.stopPropagation()"><summary>⚙ Acciones</summary><div class="acc-menu">' + it.join("") + "</div></details>" : "");
   }
   function pkHTML(f) {
     if (f.pk === "CONFIRMADA") return '<div class="pk ok">✅ PICKING CONFIRMADO (se cruza por HU y paletas)</div>';
@@ -143,15 +143,29 @@ const VAL = (function () {
     q("#x-salir").onclick = () => cerrarSesion();
     q("#x-mod").onclick = () => auxModulos("inv1");
     r.querySelectorAll(".card[data-fase]").forEach(c => c.onclick = () => {
-      if (c.dataset.est === "CERRADO") return toast("Esta fase ya está cerrada.");
-      const nuevo = c.dataset.est === "PENDIENTE";
-      if (!confirm(nuevo ? "¿Quieres iniciar la validación de la fase " + c.dataset.fase + "?" : "¿Continuar la validación de la fase " + c.dataset.fase + "?")) return;
-      auxAbrirFase(c.dataset.fase);
+      auxOpciones(c.dataset.fase, c.dataset.est);
     });
   }
 
-  async function auxAbrirFase(fase) {
+  function auxOpciones(fase, est) {
+    const f = AX.fases.find(x => x.fase === fase) || {}, mia = f.validador_ref && AX.yo && f.validador_ref === "u:" + AX.yo.usuario;
+    const otro = est === "EN PROCESO" && !mia;
+    const m = document.createElement("div"); m.className = "modal-vx on";
+    m.innerHTML = '<div><h3 style="margin:0 0 4px;text-align:center">FASE ' + E(fase) + '</h3><p class="hint" style="text-align:center">' + E(f.canal_sistema || "") + " | " + E(f.canal_fisico || "") + "</p>" +
+      (est === "CERRADO" ? '<p style="text-align:center">Esta fase ya está <b>cerrada</b>.</p><button class="btn b" data-o="ver">📋 Ver registros y reporte</button>'
+        : otro ? '<p style="text-align:center">La está validando <b>' + E(f.validador || "otra persona") + '</b>.</p><button class="btn b" data-o="ver">📋 Ver registros</button>'
+        : '<p style="text-align:center">¿Qué deseas hacer?</p><button class="btn" data-o="val">▶ ' + (est === "PENDIENTE" ? "Iniciar validación" : "Continuar validación") + '</button><button class="btn b" data-o="ver">📋 Ver registros</button>') +
+      '<button class="btn w" data-o="x">Cancelar</button></div>';
+    aroot().querySelector(".vx").appendChild(m);
+    m.onclick = ev => { if (ev.target === m) m.remove(); };
+    m.querySelectorAll("[data-o]").forEach(b => b.onclick = () => { const o = b.dataset.o; m.remove(); if (o === "val") auxAbrirFase(fase); else if (o === "ver") auxAbrirFase(fase, true); });
+  }
+  async function auxAbrirFase(fase, soloVer) {
     const f = AX.fases.find(x => x.fase === fase);
+    if (soloVer) {
+      AX.V = { fase, info: f || { fase }, sig: 1, paletas: [], items: [], editando: null, hu: "", sn: false, mara: null, soloVer: true };
+      await auxCargarPaletas(); return auxRegistros("FASE");
+    }
     const { data, error } = await sb().rpc("val_iniciar_fase", { p_fase: fase });
     if (error) { toast(error.message); return auxLista(true); }
     AX.V = { fase, info: f || { fase }, sig: data || 1, paletas: [], items: [], editando: null, hu: "", sn: false, mara: null };
@@ -250,12 +264,13 @@ const VAL = (function () {
     const V = AX.V, i = V.info, r = aroot(); V.tabReg = tab;
     const pk = i.pk === "EN CURSO" ? '<div class="pk ab">⏳ Picking en curso: ' + i.tareas_abiertas + " tareas abiertas (* = se compara con lo previsto)</div>" : i.pk === "CONFIRMADA" ? '<div class="pk ok">✅ Picking confirmado</div>' : '<div class="pk no">📄 Sin picking: se compara solo por códigos</div>';
     r.innerHTML = marco('<h1 style="font-weight:700;margin:6px 0">REGISTROS</h1><div class="fofase" style="text-align:center;color:#111">FO: ' + E(i.fo || "-") + " · FASE: " + E(V.fase) + '</div><div style="text-align:center;color:#666;font-size:14px">SIST: ' + E(i.canal_sistema || "-") + " | " + E(i.canal_fisico || "-") + "</div>" +
-      '<div class="tabs"><button data-rt="FASE" class="' + (tab === "FASE" ? "on" : "") + '">Esta fase</button><button data-rt="FO" class="' + (tab === "FO" ? "on" : "") + '">Total FO</button><button data-rt="PAL" class="' + (tab === "PAL" ? "on" : "") + '">Paletas</button></div>' +
+      '<div class="tabs"><button data-rt="FASE" class="' + (tab === "FASE" ? "on" : "") + '">Esta fase</button><button data-rt="FO" class="' + (tab === "FO" ? "on" : "") + '">Total FO</button><button data-rt="PAL" class="' + (tab === "PAL" ? "on" : "") + '">Paletas</button>' + (i.estado === "CERRADO" ? '<button data-rt="REP" class="' + (tab === "REP" ? "on" : "") + '">Reporte</button>' : "") + "</div>" +
       pk + '<div id="rg-cuerpo"><p style="text-align:center;color:#777">Cargando…</p></div>' +
       '<div class="fixbar"><a id="rg-volver">🏠 Volver al menú</a></div><div style="height:50px"></div>');
     r.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => auxRegistros(b.dataset.rt));
-    q("#rg-volver").onclick = () => { V.tabReg = "FASE"; auxPintarValidar(); };
+    q("#rg-volver").onclick = () => { V.tabReg = "FASE"; V.ed = null; if (V.soloVer) { AX.V = null; auxLista(true); } else auxPintarValidar(); };
     if (tab === "PAL") return auxPaletasEditor();
+    if (tab === "REP") return auxReporte();
     const { data, error } = await sb().rpc("val_estado_codigos", { p_fase: V.fase, p_vista: tab });
     if (V.tabReg !== tab) return;
     const cu = q("#rg-cuerpo"); if (!cu) return;
@@ -270,10 +285,26 @@ const VAL = (function () {
     };
     pintar();
   }
+  async function auxReporte() {
+    const V = AX.V, cu = q("#rg-cuerpo");
+    const { data, error } = await sb().rpc("val_vista_stock", { p_fase: V.fase, p_vista: "FASE" });
+    if (V.tabReg !== "REP" || !cu) return;
+    if (error) { cu.innerHTML = '<div class="msg bad">' + E(error.message) + "</div>"; return; }
+    cu.innerHTML = '<p class="hint">Reporte de la fase cerrada: lo solicitado vs. lo que validaste, con los comentarios de la asistente.</p>' + tablaStockHTML(data || [], false);
+  }
+  function tablaStockHTML(filas, ancho) {
+    return '<div style="overflow-x:auto"><table class="tbl-stock"><tr><th>Código</th><th>UN</th><th>Solic.</th><th>Conteo</th><th>Dif.</th><th>Status</th><th>Comentario</th></tr>' +
+      (filas.map(x => "<tr><td><b>" + E(x.codigo) + '</b><div class="d">' + E(x.descripcion || "") + "</div></td><td>" + E(x.un || "") + "</td><td>" + x.solicitado + "</td><td><b>" + x.contado + "</b></td><td style='font-weight:800;color:" + (x.diferencia < 0 ? "#e30a17" : x.diferencia > 0 ? "#d98a00" : "#00a862") + "'>" + (x.diferencia > 0 ? "+" : "") + x.diferencia + '</td><td style="font-weight:800;color:' + (ESTADO_COLOR[x.status] || "#333") + '">' + E(x.status) + '</td><td class="d" style="min-width:140px">' + E(x.comentario || "") + "</td></tr>").join("") || '<tr><td colspan="7" style="color:#888">Sin filas.</td></tr>') + "</table></div>";
+  }
   function auxPaletasEditor() {
     const V = AX.V, cu = q("#rg-cuerpo");
     if (!V.ed) V.ed = V.paletas.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: x.cant })), nc: "", nq: "", msg: "" }));
     const tot = p => p.items.reduce((t, x) => t + (Number(x.cant) || 0), 0);
+    if (V.soloVer || V.info.estado === "CERRADO") {
+      cu.innerHTML = (V.paletas.length ? V.paletas.map(p => '<div class="palc"><div class="ph"><b>PALETA ' + p.paleta + "</b><b>" + tot(p) + ' bultos</b></div><div style="font-weight:800;margin-bottom:4px">HU ' + E(p.hu) + "</div>" +
+        p.items.map(x => '<div class="it" style="grid-template-columns:1fr auto"><div><b>' + E(x.codigo) + "</b><small>" + E(x.desc) + "</small></div><b style='font-size:18px'>" + x.cant + "</b></div>").join("") + "</div>").join("") : '<p style="text-align:center;color:#777">Todavía no hay paletas guardadas.</p>');
+      return;
+    }
     const pintar = () => {
       cu.innerHTML = (V.ed.length ? V.ed.map((p, pi) => '<div class="palc"><div class="ph"><b>PALETA ' + p.paleta + "</b><b>" + tot(p) + ' bultos</b></div>' +
         '<div class="hurow2"><label>HU</label><input data-hu="' + pi + '" value="' + E(p.hu) + '" autocapitalize="characters"></div>' +
@@ -439,9 +470,11 @@ const VAL = (function () {
     const tablas = { DRIVE: "val_fases", MARA: "val_mara", STOCK: "val_esperado", MONITOR: "val_monitor", PICKING: "val_picking", USUARIOS: "val_picadores" }, ETQ = { DRIVE: "fases", MARA: "productos", STOCK: "líneas", MONITOR: "entregas", PICKING: "tareas", USUARIOS: "usuarios" };
     let fMara = "";
     try { const { data } = await sb().from("val_config").select("valor").eq("clave", "mara_ultima_carga").limit(1); if (data && data[0]) fMara = fmtTs(data[0].valor).slice(0, 10); } catch (e) {}
+    const { data: CNT } = await sb().rpc("val_conteos");
     for (const id of Object.keys(tablas)) {
       try {
-        const { count, error } = await sb().from(tablas[id]).select("*", { count: "exact", head: true }); if (error) throw error;
+        let count = CNT ? CNT[tablas[id]] : undefined;
+        if (count === undefined) { const r0 = await sb().from(tablas[id]).select("*", { count: "exact", head: true }); if (r0.error) throw r0.error; count = r0.count; }
         const b = c.querySelector('[data-go="' + id + '"]'); if (!b) continue;
         const d = document.createElement("div"); d.className = "rel"; d.style.cssText = "margin:4px 0 0;font-size:12px;font-weight:700";
         d.textContent = "En la app ahora: " + count + " " + ETQ[id] + (id === "MARA" && fMara ? " · cargado el " + fMara : ""); b.parentNode.insertBefore(d, b.nextSibling);
@@ -523,8 +556,8 @@ const VAL = (function () {
   async function datosFO(fo) {
     const por = (t, cols, col, ord) => leerTodo((a, b) => sb().from(t).select(cols).eq(col, fo).order(ord || "id").range(a, b));
     const [fases, stock, regs, com] = await Promise.all([
-      por("val_fases", "fase,fo,canal_sistema,canal_fisico,cono,estado", "fo", "fase"), por("val_esperado", "fase,material,descripcion,un,cantidad", "fo"),
-      por("val_registros", "fase,paleta,hu,codigo,descripcion,cantidad,creado", "fo"), por("val_comentarios", "fase,codigo,comentario", "fo", "fase")]);
+      por("val_fases", "fase,fo,canal_sistema,canal_fisico,cono,estado,inicio,fin", "fo", "fase"), por("val_esperado", "fase,material,descripcion,un,cantidad", "fo"),
+      por("val_registros", "fase,paleta,hu,codigo,descripcion,cantidad,creado", "fo"), por("val_comentarios", "fase,codigo,comentario,usuario,actualizado", "fo", "fase")]);
     const fasesIds = fases.map(f => f.fase);
     let pick = await por("val_picking", "fase,status,hu,producto,descripcion,ctd_prev,ctd_real,confirmado_por,fecha_conf,hora_conf", "fo");
     if (fasesIds.length) { // picking de las fases del viaje aunque no tenga FO
@@ -550,9 +583,84 @@ const VAL = (function () {
         '<div class="kpi"><b>' + r.noPertenece + '</b><span>no pertenecen</span></div><div class="kpi"><b>' + r.pendientes + '</b><span>sin registrar</span></div>' +
         '<div class="kpi r"><b>' + r.erroresPicking + '</b><span>errores de picking</span></div><div class="kpi o"><b>' + r.problemasHU + '</b><span>paletas con problema de HU</span></div></div>' +
         res.avisos.map(a => '<div class="avisos">⚠ ' + E(a) + "</div>").join("") +
-        '<button class="btn-v" id="cr-xls">📥 Descargar Excel del viaje</button>';
+        '<button class="btn-v" id="cr-xls">📥 Descargar Excel del viaje</button>' +
+        '<div class="tabs-vs" style="margin-top:18px"><button data-vt="stock" class="' + (ST.vista !== "pick" ? "on" : "") + '">📦 Según STOCK ENTREGAS</button><button data-vt="pick" class="' + (ST.vista === "pick" ? "on" : "") + '">🧾 Según PICKING (detalle)</button></div><div id="cr-vista"></div>';
       q("#cr-xls").onclick = () => descargarExcel(res);
+      ST.dat = dat;
+      out.querySelectorAll("[data-vt]").forEach(b => b.onclick = () => { ST.vista = b.dataset.vt; out.querySelectorAll("[data-vt]").forEach(x => x.classList.toggle("on", x === b)); staffVista(res, dat); });
+      staffVista(res, dat);
     } catch (e) { out.innerHTML = '<div class="avisos">No se pudo calcular: ' + E(e.message || e) + "</div>"; }
+  }
+
+  /* ---- Vistas del cruce en pantalla: formato STOCK ENTREGAS (con comentarios) y detalle de PICKING ---- */
+  const fechaDT = (f, h) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(f || "").trim()); if (!m) return null; const t = /^(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(h || "").trim()); return new Date(+m[3], +m[2] - 1, +m[1], t ? +t[1] : 0, t ? +t[2] : 0, t ? +(t[3] || 0) : 0); };
+  function staffVista(res, dat) { if (ST.vista === "pick") staffVistaPicking(res, dat); else staffVistaStock(res, dat); }
+  function xlsSimple(nombre, hoja, aoa, anchos) { const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = anchos.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, hoja); XLSX.writeFile(wb, nombre); toast("Excel descargado ✔"); }
+
+  function staffVistaStock(res, dat) {
+    const cu = q("#cr-vista"), mia = (typeof usuarioActual !== "undefined" && usuarioActual && usuarioActual.nombre) || ST.yo;
+    const faseDe = {}; dat.stock.forEach(x => { const c = window.CRUCE.clean(x.material); if (x.fase && !faseDe[c]) faseDe[c] = window.CRUCE.clean(x.fase); });
+    const fb = (dat.fases[0] || {}).fase || "";
+    const COM = {}; dat.com.forEach(c => { (COM[window.CRUCE.clean(c.codigo)] = COM[window.CRUCE.clean(c.codigo)] || []).push(c); });
+    let solo = ST.soloDif === true;
+    const pintar = () => {
+      const filas = res.filas.filter(f => !solo || f.status !== "CUADRADO");
+      cu.innerHTML = '<p class="rel">Es el formato de <b>STOCK ENTREGAS</b>: lo solicitado vs. lo que validaron los auxiliares. Escribe un comentario en la fila (por ejemplo un ajuste por capacidad o peso del transporte): <b>se guarda en línea</b> y el auxiliar lo verá en su reporte cuando cierre la validación.</p>' +
+        '<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="vs-solo"' + (solo ? " checked" : "") + '> Mostrar solo diferencias</label> <button class="btn-v g" id="vs-xls">📥 Descargar esta vista</button>' +
+        '<div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Código</th><th>Descripción</th><th>UN</th><th>Solicitado</th><th>Conteo</th><th>Dif.</th><th>Status</th><th>Comentario de la asistente</th></tr>' +
+        filas.map((f, i) => { const c = window.CRUCE.clean(f.codigo), fa = faseDe[c] || fb, ex = (COM[c] || []).find(x => window.CRUCE.clean(x.fase) === fa) || (COM[c] || [])[0];
+          const falta = f.status === "FALTANTE" || f.status === "PENDIENTE" || f.status === "AJUSTE";
+          return "<tr><td><b>" + E(f.codigo) + "</b></td><td>" + E(f.desc || "") + "</td><td>" + E(f.un || "") + "</td><td>" + f.esp + "</td><td><b>" + f.reg + "</b></td><td style='font-weight:800;color:" + (f.dif < 0 ? "#e30a17" : f.dif > 0 ? "#d98a00" : "#00a862") + "'>" + (f.dif > 0 ? "+" : "") + f.dif + "</td><td style='font-weight:800;color:" + (ESTADO_COLOR[f.status] || "#333") + "'>" + E(f.status) + "</td>" +
+            '<td style="min-width:300px"><div style="display:flex;gap:6px;flex-wrap:wrap">' + (falta ? '<input type="number" min="1" placeholder="No cargado" data-n="' + i + '" style="width:92px" title="Cajas que NO se cargaron en el camión">' : "") +
+            '<input type="text" data-t="' + i + '" value="' + E(ex ? ex.comentario : "") + '" placeholder="Comentario (ej. ajuste por capacidad del transporte)" style="flex:1;min-width:160px"><button class="btn-v" data-g="' + i + '" style="margin:0">💾</button></div>' +
+            (ex && ex.usuario ? '<div class="rel" style="font-size:11px">Por ' + E(ex.usuario) + (ex.actualizado ? " · " + fmtTs(ex.actualizado) : "") + "</div>" : "") + "</td></tr>"; }).join("") + "</table></div>";
+      q("#vs-solo").onchange = e => { ST.soloDif = e.target.checked; solo = ST.soloDif; pintar(); };
+      q("#vs-xls").onclick = () => xlsSimple("STOCK_ENTREGAS_FO_" + res.fo + ".xlsx", "STOCK ENTREGAS", [["VIAJE", "CODIGO", "DESCRIPCION", "UN", "SOLICITADO", "CONTEO", "DIFERENCIA", "STATUS", "COMENTARIO"]].concat(filas.map(f => { const c = window.CRUCE.clean(f.codigo), l = (COM[c] || []).map(x => x.comentario).join(" | "); return [String(res.fo), String(f.codigo), f.desc, f.un, f.esp, f.reg, f.dif, f.status, l]; })), [14, 14, 44, 6, 11, 9, 11, 14, 60]);
+      cu.querySelectorAll("[data-g]").forEach(b => b.onclick = async () => {
+        const i = +b.dataset.g, f = filas[i], c = window.CRUCE.clean(f.codigo), fa = faseDe[c] || fb;
+        if (!fa) return alert("No encuentro la fase de este código.");
+        const n = Number((cu.querySelector('[data-n="' + i + '"]') || {}).value || 0), t = cu.querySelector('[data-t="' + i + '"]').value.trim();
+        const texto = (n > 0 && !/No se cargó \d+ cajas/.test(t) ? "No se cargó " + n + " cajas. " : "") + t;
+        b.disabled = true;
+        let er;
+        if (!texto) er = (await sb().from("val_comentarios").delete().eq("fase", fa).eq("codigo", c)).error;
+        else er = (await sb().from("val_comentarios").upsert({ fase: fa, codigo: c, fo: res.fo, descripcion: f.desc || null, comentario: texto, usuario: mia || null, actualizado: new Date().toISOString() }, { onConflict: "fase,codigo" })).error;
+        if (er) { b.disabled = false; return alert(er.message); }
+        toast("Comentario guardado ✔"); staffCalcular();
+      });
+    };
+    pintar();
+  }
+
+  function staffVistaPicking(res, dat) {
+    const cu = q("#cr-vista"), F = ST.fp = ST.fp || {};
+    const fasesViaje = dat.fases.map(f => f.fase), FI = {}; dat.fases.forEach(f => FI[window.CRUCE.clean(f.fase)] = f);
+    const huReg = {}; dat.regs.forEach(r => { huReg[window.CRUCE.clean(r.fase) + "|" + window.CRUCE.huKey(r.hu)] = 1; });
+    const todo = dat.pick.filter(r => String(r.status || "").toUpperCase() !== "A").map(r => {
+      const u = String(r.confirmado_por || "").trim(), nom = u && dat.U[u.toUpperCase()] ? dat.U[u.toUpperCase()][0].nombre : "", fa = window.CRUCE.clean(r.fase), conf = String(r.status || "").toUpperCase() === "C";
+      return { fase: fa, codigo: window.CRUCE.clean(r.producto), desc: r.descripcion || "", hu: r.hu || "", prev: r.ctd_prev, real: r.ctd_real, conf, usuario: u, nombre: nom, fecha: r.fecha_conf || "", hora: r.hora_conf || "", dt: conf ? fechaDT(r.fecha_conf, r.hora_conf) : null, enConteo: r.hu ? (huReg[fa + "|" + window.CRUCE.huKey(r.hu)] ? "Sí" : "No") : "—" };
+    });
+    if (!todo.length) { cu.innerHTML = '<div class="avisos">Este viaje no tiene PICKING cargado. Súbelo en «Cargar datos».</div>'; return; }
+    const pintar = () => {
+      const d1 = F.d1 ? new Date(F.d1 + "T00:00:00") : null, d2 = F.d2 ? new Date(F.d2 + "T23:59:59") : null, t = (F.q || "").toUpperCase().trim();
+      const filas = todo.filter(r => (!F.fase || r.fase === F.fase) &&
+        (!d1 || (r.dt && r.dt >= d1)) && (!d2 || (r.dt && r.dt <= d2)) &&
+        (!F.despues || (r.dt && (() => { const f = FI[r.fase], ref = f ? (f.estado === "CERRADO" && f.fin ? new Date(f.fin) : f.inicio ? new Date(f.inicio) : null) : null; return ref && r.dt > ref; })())) &&
+        (!t || (r.codigo + " " + r.hu + " " + r.usuario + " " + r.nombre).toUpperCase().includes(t)));
+      cu.innerHTML = '<p class="rel">Detalle de las tareas de <b>PICKING</b>: código, HU (UMp destino), quién confirmó y a qué hora. Filtra por fecha o marca «solo después de validar» para ver lo que se confirmó cuando el validador ya había revisado esa mercadería.</p>' +
+        '<div class="filtros-vs"><select id="vp-fase"><option value="">Todas las fases</option>' + fasesViaje.map(f => '<option' + (F.fase === window.CRUCE.clean(f) ? " selected" : "") + ">" + E(f) + "</option>").join("") + "</select> " +
+        'Desde <input type="date" id="vp-d1" value="' + E(F.d1 || "") + '"> Hasta <input type="date" id="vp-d2" value="' + E(F.d2 || "") + '"> <input type="text" id="vp-q" placeholder="Buscar código, HU o picador" value="' + E(F.q || "") + '" style="min-width:200px"> ' +
+        '<label style="display:inline-flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="vp-des"' + (F.despues ? " checked" : "") + '> Solo confirmadas después de validar</label> <button class="btn-v g" id="vp-xls">📥 Descargar esta vista</button></div>' +
+        '<div class="rel">' + filas.length + " de " + todo.length + " tareas</div>" +
+        '<div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Fase</th><th>Código</th><th>Descripción</th><th>HU (UMp destino)</th><th>Cant.</th><th>Estado</th><th>Confirmado por</th><th>Fecha</th><th>Hora</th><th>HU en conteo</th></tr>' +
+        filas.slice(0, 1500).map(r => "<tr><td>" + E(r.fase) + "</td><td><b>" + E(r.codigo) + "</b></td><td>" + E(r.desc) + "</td><td>" + E(r.hu) + "</td><td>" + (r.conf ? r.real : r.prev) + "</td><td style='font-weight:700;color:" + (r.conf ? "#00a862" : "#d98a00") + "'>" + (r.conf ? "Confirmada" : "Abierta") + "</td><td>" + E(r.usuario) + (r.nombre ? '<div class="d" style="font-size:11px;color:#666">' + E(r.nombre) + "</div>" : "") + "</td><td>" + E(r.fecha) + "</td><td>" + E(r.hora) + "</td><td style='font-weight:700;color:" + (r.enConteo === "Sí" ? "#00a862" : r.enConteo === "No" ? "#e30a17" : "#999") + "'>" + r.enConteo + "</td></tr>").join("") + "</table></div>" + (filas.length > 1500 ? '<div class="rel">Se muestran las primeras 1500; usa los filtros o descarga el Excel para ver todas.</div>' : "");
+      const en = (id, k, ev) => { const el = q(id); el[ev || "onchange"] = () => { F[k] = el.type === "checkbox" ? el.checked : el.value; pintar(); }; };
+      q("#vp-fase").onchange = e => { F.fase = e.target.value ? window.CRUCE.clean(e.target.value) : ""; pintar(); };
+      en("#vp-d1", "d1"); en("#vp-d2", "d2"); en("#vp-des", "despues");
+      const qi = q("#vp-q"); qi.onchange = () => { F.q = qi.value; pintar(); };
+      q("#vp-xls").onclick = () => xlsSimple("PICKING_FO_" + res.fo + ".xlsx", "PICKING", [["FASE", "CODIGO", "DESCRIPCION", "HU (UMP DESTINO)", "CANTIDAD", "ESTADO", "CONFIRMADO POR", "NOMBRE", "FECHA CONFIRMACION", "HORA CONFIRMACION", "HU EN CONTEO DEL VALIDADOR"]].concat(filas.map(r => [r.fase, r.codigo, r.desc, r.hu, r.conf ? r.real : r.prev, r.conf ? "Confirmada" : "Abierta", r.usuario, r.nombre, r.fecha, r.hora, r.enConteo])), [12, 12, 44, 24, 10, 12, 16, 30, 14, 14, 14]);
+    };
+    pintar();
   }
   function libro(res) {
     const wb = XLSX.utils.book_new(), add = (nombre, aoa, anchos) => { const ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = anchos.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, nombre); };
