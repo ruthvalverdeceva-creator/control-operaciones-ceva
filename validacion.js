@@ -55,6 +55,14 @@ const VAL = (function () {
       '<button data-dia="' + ayerStr() + '" class="' + (S.dia === ayerStr() ? "on" : "") + '">AYER</button>' +
       '<button data-dia="" class="' + (S.dia === "" ? "on" : "") + '">TODAS</button></div>';
   }
+  function accionesHTML(f, admin) {
+    const it = [];
+    if (f.estado === "CERRADO") it.push('<button data-reabrir="' + E(f.fase) + '">↩ Reabrir fase</button>');
+    if (admin && f.paletas > 0) it.push('<button data-borrarreg="' + E(f.fase) + '">🧹 Borrar registros contados</button>');
+    if (admin && f.pk !== "SIN PICKING") it.push('<button data-borrarpk="' + E(f.fase) + '">🧹 Borrar picking</button>');
+    if (admin) it.push('<button class="pelig" data-eliminar="' + E(f.fase) + '">🗑 Eliminar fase</button>');
+    return it.length ? '<details class="acc" onclick="event.stopPropagation()"><summary>⚙ Acciones</summary><div class="acc-menu">' + it.join("") + "</div></details>" : "";
+  }
   function pkHTML(f) {
     if (f.pk === "CONFIRMADA") return '<div class="pk ok">✅ PICKING CONFIRMADO (se cruza por HU y paletas)</div>';
     if (f.pk === "EN CURSO") return '<div class="pk ab">⏳ PICKING EN CURSO · ' + f.tareas_abiertas + " tareas abiertas</div>";
@@ -81,8 +89,7 @@ const VAL = (function () {
           (f.paletas ? '<div class="sm" style="font-weight:700;color:#111">📦 ' + f.paletas + " paletas · " + f.bultos + " bultos registrados</div>" : "") +
           (opt.staff ? (f.lineas_stock > 0 ? '<div class="pk ok">📦 STOCK ENTREGA CARGADO · ' + f.lineas_stock + " líneas</div>" : '<div class="pk ab">📦 SIN STOCK ENTREGA · falta subirlo en «Cargar datos»</div>') : "") +
           pkHTML(f) +
-          (opt.staff && opt.admin ? '<div style="margin-top:6px"><button class="mn" data-eliminar="' + E(f.fase) + '" style="border:1px solid #e3a5a9;border-radius:8px;background:#fdeaea;color:#a30f1b;padding:6px 10px;font-weight:700;cursor:pointer">🗑 Eliminar fase</button></div>' : "") +
-          (opt.staff && f.estado === "CERRADO" ? '<div style="margin-top:6px"><button class="mn" data-reabrir="' + E(f.fase) + '" style="border:1px solid #bbb;border-radius:8px;background:#f3f3f3;padding:6px 10px;font-weight:700;cursor:pointer">↩ Reabrir</button></div>' : "") +
+          (opt.staff ? accionesHTML(f, opt.admin) : "") +
           "</div>";
       });
       h += "</div>";
@@ -104,7 +111,19 @@ const VAL = (function () {
   const marco = inner => '<div class="vx"><div class="vx-wrap">' + inner + "</div></div>";
   const logoHTML = '<div class="logo">ceva<b>▲</b><small>LOGISTICS</small></div>';
 
-  function auxIniciar(yo) { AX.yo = yo; AX.V = null; auxLista(); }
+  function auxIniciar(yo) { AX.yo = yo; AX.V = null; auxModulos("inv0"); }
+
+  /* Menú de módulos del auxiliar: Inventario → Validación Outbound */
+  function auxModulos(nivel) {
+    const r = aroot(), nom = '<h1>Hola, <b>' + E(AX.yo.nombre) + "</b></h1>";
+    if (nivel === "inv0") {
+      r.innerHTML = marco(logoHTML + nom + '<p class="hint" style="text-align:center">Elige un módulo</p><div class="card" id="m-inv" style="text-align:center"><div style="font-size:34px">📦</div><div class="v">Inventario</div></div><button class="btn k" id="x-salir">Salir</button>');
+      q("#m-inv").onclick = () => auxModulos("inv1"); q("#x-salir").onclick = () => cerrarSesion();
+    } else {
+      r.innerHTML = marco(logoHTML + '<h1>Inventario</h1><div class="card" id="m-val" style="text-align:center"><div style="font-size:34px">✅</div><div class="v">Validación Outbound</div><div class="sm">Conteo ciego por fase</div></div><button class="btn w" id="m-atras">← Volver a módulos</button>');
+      q("#m-val").onclick = () => auxLista(true); q("#m-atras").onclick = () => auxModulos("inv0");
+    }
+  }
 
   async function auxLista(fuerza) {
     const r = aroot();
@@ -117,13 +136,16 @@ const VAL = (function () {
   function auxPintarLista() {
     const r = aroot();
     r.innerHTML = marco(logoHTML + '<h1>FASES <small>· ' + E(AX.yo.nombre) + "</small></h1>" +
-      '<div class="fila2"><button class="btn" id="x-act">Actualizar</button><button class="btn k" id="x-salir">Salir</button></div>' +
+      '<div class="fila2"><button class="btn" id="x-act">Actualizar</button><button class="btn w" id="x-mod">Módulos</button><button class="btn k" id="x-salir">Salir</button></div>' +
       barraFiltros(AX.fases, AX.S) + '<div id="x-lista">' + listaHTML(AX.fases, AX.S, { yo: AX.yo.usuario }) + "</div>");
     enlazarFiltros(r, AX.S, auxPintarLista);
     q("#x-act").onclick = () => { toast("Actualizando…"); auxLista(true); };
     q("#x-salir").onclick = () => cerrarSesion();
+    q("#x-mod").onclick = () => auxModulos("inv1");
     r.querySelectorAll(".card[data-fase]").forEach(c => c.onclick = () => {
       if (c.dataset.est === "CERRADO") return toast("Esta fase ya está cerrada.");
+      const nuevo = c.dataset.est === "PENDIENTE";
+      if (!confirm(nuevo ? "¿Quieres iniciar la validación de la fase " + c.dataset.fase + "?" : "¿Continuar la validación de la fase " + c.dataset.fase + "?")) return;
       auxAbrirFase(c.dataset.fase);
     });
   }
@@ -180,9 +202,11 @@ const VAL = (function () {
   }
   function auxMsg(t, cls) { const m = q("#x-msg"); if (!m) return; m.className = "msg " + (cls || ""); m.textContent = t || ""; }
   async function auxBuscar() {
-    const V = AX.V, c = (q("#x-sku").value || "").trim().toUpperCase().replace(/^S/, "").replace(/[^A-Z0-9]/g, "");
+    const V = AX.V; if (!V || !q("#x-sku")) return;
+    const c = (q("#x-sku").value || "").trim().toUpperCase().replace(/^S/, "").replace(/[^A-Z0-9]/g, "");
     if (!c) { V.mara = null; q("#x-uma").value = ""; q("#x-desc").value = ""; return; }
     const { data, error } = await sb().from("val_mara").select("codigo,descripcion,uma,ean").or("codigo.eq." + c + ",ean.eq." + c).limit(1);
+    if (!q("#x-sku")) return; // la pantalla cambió mientras buscaba
     if (error) return auxMsg("No se pudo buscar el código: " + error.message, "bad");
     if (!data || !data.length) { V.mara = null; q("#x-uma").value = ""; q("#x-desc").value = ""; return auxMsg("Código no encontrado en el catálogo (MARA). Revisa el SKU/EAN o avisa a la administradora.", "bad"); }
     V.mara = data[0]; q("#x-sku").value = V.mara.codigo; q("#x-uma").value = V.mara.uma || ""; q("#x-desc").value = V.mara.descripcion; auxMsg("");
@@ -204,7 +228,7 @@ const VAL = (function () {
     b.disabled = false;
     if (error) return auxMsg(error.message, "bad");
     toast("Paleta " + n + " guardada ✔");
-    V.items = []; V.hu = ""; V.sn = false; V.mara = null; V.editando = null;
+    V.items = []; V.hu = ""; V.sn = false; V.mara = null; V.editando = null; V.ed = null;
     await auxCargarPaletas(); auxPintarValidar();
   }
   async function auxBorrar() {
@@ -219,18 +243,75 @@ const VAL = (function () {
     if (V.items.length || V.hu || V.sn) { if (!confirm("¿Borrar lo que llevas en esta paleta?")) return; }
     V.items = []; V.hu = ""; V.sn = false; V.mara = null; auxPintarValidar();
   }
-  function auxMenu() {
-    const V = AX.V, m = q("#x-modal"), b = q("#x-modal-in");
-    b.innerHTML = '<h3 style="margin-top:0">Paletas registradas (' + V.paletas.length + ')</h3>' +
-      (V.paletas.length ? V.paletas.map(p => '<div class="pal" data-edit="' + p.paleta + '"><span>Paleta ' + p.paleta + " · " + E(p.hu) + "</span><span>" + p.items.reduce((t, i) => t + i.cant, 0) + " bultos ✏️</span></div>").join("") : '<p style="color:#777">Todavía no hay paletas.</p>') +
-      '<button class="btn k" id="x-cerrar-m">Cerrar</button>';
-    m.classList.add("on");
-    q("#x-cerrar-m").onclick = () => m.classList.remove("on");
-    b.querySelectorAll("[data-edit]").forEach(d => d.onclick = () => {
-      const p = V.paletas.find(x => x.paleta === Number(d.dataset.edit)); if (!p) return;
-      V.editando = p.paleta; V.items = p.items.map(i => ({ codigo: i.codigo, desc: i.desc, cant: i.cant })); V.sn = p.hu === "SN"; V.hu = V.sn ? "" : p.hu; V.mara = null;
-      auxPintarValidar();
-    });
+  /* ---- Pantalla REGISTROS: estado por código (solo palabras), total del viaje y edición de paletas ---- */
+  function auxMenu() { AX.V.tabReg = AX.V.tabReg || "FASE"; auxRegistros(AX.V.tabReg); }
+  const ESTADO_COLOR = { CUADRADO: "#00a862", FALTANTE: "#e30a17", SOBRANTE: "#d98a00", PENDIENTE: "#666", "NO PERTENECE": "#7b3fe4", "EN OTRA FASE": "#0b6fc2", "DE OTRA FASE": "#0b6fc2", AJUSTE: "#0a8f8f" };
+  async function auxRegistros(tab) {
+    const V = AX.V, i = V.info, r = aroot(); V.tabReg = tab;
+    const pk = i.pk === "EN CURSO" ? '<div class="pk ab">⏳ Picking en curso: ' + i.tareas_abiertas + " tareas abiertas (* = se compara con lo previsto)</div>" : i.pk === "CONFIRMADA" ? '<div class="pk ok">✅ Picking confirmado</div>' : '<div class="pk no">📄 Sin picking: se compara solo por códigos</div>';
+    r.innerHTML = marco('<h1 style="font-weight:700;margin:6px 0">REGISTROS</h1><div class="fofase" style="text-align:center;color:#111">FO: ' + E(i.fo || "-") + " · FASE: " + E(V.fase) + '</div><div style="text-align:center;color:#666;font-size:14px">SIST: ' + E(i.canal_sistema || "-") + " | " + E(i.canal_fisico || "-") + "</div>" +
+      '<div class="tabs"><button data-rt="FASE" class="' + (tab === "FASE" ? "on" : "") + '">Esta fase</button><button data-rt="FO" class="' + (tab === "FO" ? "on" : "") + '">Total FO</button><button data-rt="PAL" class="' + (tab === "PAL" ? "on" : "") + '">Paletas</button></div>' +
+      pk + '<div id="rg-cuerpo"><p style="text-align:center;color:#777">Cargando…</p></div>' +
+      '<div class="fixbar"><a id="rg-volver">🏠 Volver al menú</a></div><div style="height:50px"></div>');
+    r.querySelectorAll("[data-rt]").forEach(b => b.onclick = () => auxRegistros(b.dataset.rt));
+    q("#rg-volver").onclick = () => { V.tabReg = "FASE"; auxPintarValidar(); };
+    if (tab === "PAL") return auxPaletasEditor();
+    const { data, error } = await sb().rpc("val_estado_codigos", { p_fase: V.fase, p_vista: tab });
+    if (V.tabReg !== tab) return;
+    const cu = q("#rg-cuerpo"); if (!cu) return;
+    if (error) { cu.innerHTML = '<div class="msg bad">' + E(error.message) + "</div>"; return; }
+    const filas = data || [], ok = filas.filter(x => x.status === "CUADRADO").length, solo = V.soloDif === true;
+    const pintar = () => {
+      cu.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><span class="chip ok">' + ok + "/" + filas.length + ' códigos cuadrados</span><span class="chip mal">' + (filas.length - ok) + ' con diferencia</span></div>' +
+        '<label style="display:flex;gap:8px;align-items:center;font-weight:400;margin:6px 0"><input type="checkbox" id="rg-solo" style="width:auto;margin:0"' + (V.soloDif ? " checked" : "") + "> Mostrar solo diferencias</label>" +
+        "<table><tr><th>Código</th><th>Bultos</th><th>Status</th></tr>" +
+        (filas.filter(x => !V.soloDif || x.status !== "CUADRADO").map(x => "<tr><td><b>" + E(x.codigo) + '</b><div class="d">' + E(x.descripcion || "") + "</div></td><td><b>" + x.reg + "</b>" + (x.comparado ? ' <span style="color:#d98a00;font-weight:800">*</span>' : "") + '</td><td style="font-weight:800;color:' + (ESTADO_COLOR[x.status] || "#333") + '">' + E(x.status) + "</td></tr>").join("") || '<tr><td colspan="3" style="color:#888">Sin códigos para mostrar.</td></tr>') + "</table>";
+      q("#rg-solo").onchange = e => { V.soloDif = e.target.checked; pintar(); };
+    };
+    pintar();
+  }
+  function auxPaletasEditor() {
+    const V = AX.V, cu = q("#rg-cuerpo");
+    if (!V.ed) V.ed = V.paletas.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: x.cant })), nc: "", nq: "", msg: "" }));
+    const tot = p => p.items.reduce((t, x) => t + (Number(x.cant) || 0), 0);
+    const pintar = () => {
+      cu.innerHTML = (V.ed.length ? V.ed.map((p, pi) => '<div class="palc"><div class="ph"><b>PALETA ' + p.paleta + "</b><b>" + tot(p) + ' bultos</b></div>' +
+        '<div class="hurow2"><label>HU</label><input data-hu="' + pi + '" value="' + E(p.hu) + '" autocapitalize="characters"></div>' +
+        p.items.map((x, k) => '<div class="it"><div><b>' + E(x.codigo) + '</b><small>' + E(x.desc) + '</small></div><input type="number" inputmode="numeric" min="1" data-q="' + pi + "|" + k + '" value="' + x.cant + '"><button class="ic" data-x="' + pi + "|" + k + '">🗑️</button></div>').join("") +
+        '<div class="addrow"><input data-nc="' + pi + '" placeholder="+ Código o EAN" value="' + E(p.nc) + '" autocapitalize="characters"><input data-nq="' + pi + '" type="number" inputmode="numeric" placeholder="Cant." value="' + E(p.nq) + '"><button class="btn w" data-add="' + pi + '">Agregar</button></div>' +
+        (p.msg ? '<div class="msg bad">' + E(p.msg) + "</div>" : "") + '<button class="btn" data-save="' + pi + '">Guardar paleta ' + p.paleta + "</button></div>").join("") : '<p style="text-align:center;color:#777">Todavía no hay paletas guardadas.</p>');
+      cu.querySelectorAll("[data-hu]").forEach(e => e.oninput = () => { V.ed[+e.dataset.hu].hu = e.value.toUpperCase().replace(/\s/g, ""); });
+      cu.querySelectorAll("[data-q]").forEach(e => e.onchange = () => { const [a, b] = e.dataset.q.split("|"); V.ed[+a].items[+b].cant = e.value; pintar(); });
+      cu.querySelectorAll("[data-nc]").forEach(e => e.oninput = () => { V.ed[+e.dataset.nc].nc = e.value; });
+      cu.querySelectorAll("[data-nq]").forEach(e => e.oninput = () => { V.ed[+e.dataset.nq].nq = e.value; });
+      cu.querySelectorAll("[data-x]").forEach(e => e.onclick = () => { const [a, b] = e.dataset.x.split("|"); V.ed[+a].items.splice(+b, 1); pintar(); });
+      cu.querySelectorAll("[data-add]").forEach(e => e.onclick = async () => {
+        const p = V.ed[+e.dataset.add], c = (p.nc || "").trim().toUpperCase().replace(/^S/, "").replace(/[^A-Z0-9]/g, ""), n = Number(p.nq); p.msg = "";
+        if (!c) { p.msg = "Escribe el código o EAN."; return pintar(); }
+        if (!p.nq || !Number.isInteger(n) || n < 1) { p.msg = "Escribe una cantidad entera mayor a 0."; return pintar(); }
+        const { data, error } = await sb().from("val_mara").select("codigo,descripcion").or("codigo.eq." + c + ",ean.eq." + c).limit(1);
+        if (error || !data || !data.length) { p.msg = "Código no encontrado en el catálogo (MARA)."; return pintar(); }
+        const ya = p.items.find(x => x.codigo === data[0].codigo); if (ya) ya.cant = (Number(ya.cant) || 0) + n; else p.items.push({ codigo: data[0].codigo, desc: data[0].descripcion, cant: n });
+        p.nc = ""; p.nq = ""; pintar();
+      });
+      cu.querySelectorAll("[data-save]").forEach(e => e.onclick = async () => {
+        const p = V.ed[+e.dataset.save]; p.msg = "";
+        const malos = p.items.some(x => !Number.isInteger(Number(x.cant)) || Number(x.cant) < 1);
+        if (!p.hu) { p.msg = "La paleta necesita un HU (o escribe SN)."; return pintar(); }
+        if (!p.items.length) {
+          if (!confirm("La paleta " + p.paleta + " quedó sin productos. ¿Borrarla completa?")) return;
+          const { error } = await sb().rpc("val_borrar_paleta", { p_fase: V.fase, p_paleta: p.paleta });
+          if (error) { p.msg = error.message; return pintar(); }
+          toast("Paleta " + p.paleta + " borrada"); V.ed = null; await auxCargarPaletas(); return auxRegistros("PAL");
+        }
+        if (malos) { p.msg = "Todas las cantidades deben ser enteros mayores a 0."; return pintar(); }
+        e.disabled = true;
+        const { error } = await sb().rpc("val_guardar_paleta", { p_fase: V.fase, p_paleta: p.paleta, p_hu: p.hu, p_items: p.items.map(x => ({ codigo: x.codigo, desc: x.desc, cant: Number(x.cant) })), p_motivo: "Corrección del validador" });
+        if (error) { p.msg = error.message; return pintar(); }
+        toast("Paleta " + p.paleta + " guardada ✔"); V.ed = null; await auxCargarPaletas(); auxRegistros("PAL");
+      });
+    };
+    pintar();
   }
   async function auxFinalizarFase() {
     const V = AX.V;
@@ -291,13 +372,16 @@ const VAL = (function () {
       enlazarFiltros(c, ST.S, pintar);
       c.querySelectorAll("[data-cruce]").forEach(b => b.onclick = ev => { ev.stopPropagation(); ST.tab = "cruce"; ST.fo = b.dataset.cruce; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
       c.querySelectorAll("[data-sinstock]").forEach(b => b.onclick = ev => { ev.stopPropagation(); alert("Este viaje todavía no tiene STOCK ENTREGA cargado, así que no se puede cruzar. " + (ST.esAdmin ? "Ve a «Cargar datos» y sube el STOCK ENTREGA." : "Pídele a la administradora que lo suba.")); if (!ST.esAdmin) return; ST.tab = "cargar"; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
-      c.querySelectorAll("[data-eliminar]").forEach(b => b.onclick = async ev => {
+      const accion = (sel, texto, rpc, ok) => c.querySelectorAll(sel).forEach(b => b.onclick = async ev => {
         ev.stopPropagation();
-        const fa = b.dataset.eliminar;
-        if (!confirm("¿Estás segura de eliminar la fase " + fa + "?\n\nSe borrarán también su stock, su picking, lo contado por los auxiliares y sus comentarios. No se puede deshacer.")) return;
-        const { error: e3 } = await sb().rpc("val_fase_eliminar", { p_fase: fa });
-        if (e3) return alert(e3.message); toast("Fase eliminada"); staffFases(c);
+        const fa = b.dataset[sel.replace(/^\[data-|\]$/g, "")];
+        if (!confirm(texto(fa))) return;
+        const { error: e3 } = await sb().rpc(rpc, { p_fase: fa });
+        if (e3) return alert(e3.message); toast(ok); staffFases(c);
       });
+      accion("[data-eliminar]", fa => "¿Estás segura de eliminar la fase " + fa + "?\n\nSe borrarán también su stock, su picking, lo contado por los auxiliares y sus comentarios. No se puede deshacer.", "val_fase_eliminar", "Fase eliminada");
+      accion("[data-borrarreg]", fa => "¿Borrar TODO lo contado en la fase " + fa + "?\n\nSe borrarán las paletas registradas por el validador y la fase vuelve a PENDIENTE. No se puede deshacer.", "val_fase_borrar_registros", "Registros borrados");
+      accion("[data-borrarpk]", fa => "¿Borrar el picking cargado de la fase " + fa + "?\n\nLa fase se cruzará solo por códigos hasta que vuelvas a subir el picking.", "val_fase_borrar_picking", "Picking borrado");
       c.querySelectorAll("[data-reabrir]").forEach(b => b.onclick = async ev => {
         ev.stopPropagation();
         if (!confirm("¿Reabrir la fase " + b.dataset.reabrir + "? Volverá a estar EN PROCESO.")) return;
