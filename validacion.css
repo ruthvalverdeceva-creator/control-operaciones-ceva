@@ -156,3 +156,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .tbl-vs .comrow .btn-v { margin: 0; padding: 8px 12px; }
 .tbl-vs .comrow.sin-n { grid-template-columns: 1fr auto; }
 .tbl-vs .quien { font-size: 11px; color: #6b7585; margin-top: 3px; }
+.vx .fixbar { display: flex; gap: 10px; justify-content: center; }
+.vx .fixbar a { flex: 1; max-width: 220px; border: 1.5px solid var(--navy); border-radius: 24px; padding: 10px 8px; font-size: 14px; }
+.vx .fixbar a.seg { background: var(--navy); color: #fff; }
+#fd-pal { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin: 8px 0; }
