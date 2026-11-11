@@ -268,7 +268,7 @@ function vistaInicio(main) {
 }
 
 function vistaInventario(main, sub) {
-  if (sub === "validacion") { VAL.staff.render(main, usuarioActual.usuario, esAdmin()); return; }
+  if (sub === "validacion") { VAL.staff.render(main, usuarioActual.usuario, true); return; }
   main.innerHTML = '<div class="tarjeta encabezado"><div class="migas"><a href="#inicio">Inicio</a> / Inventario</div>' +
     '<h2>Inventario</h2><p>Elige una herramienta.</p></div><div class="grid">' +
     '<a class="tarjeta modulo" href="#inventario/validacion"><div class="icono">✅</div><h3>VALIDACIÓN OUTBOUND</h3>' +
