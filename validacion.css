@@ -116,3 +116,12 @@
 .vx .palc .it input { text-align: center; font-weight: 800; font-size: 18px; margin: 0; }
 .vx .palc .addrow { display: grid; grid-template-columns: 1fr 70px auto; gap: 6px; align-items: center; margin: 8px 0; }
 .vx .palc .addrow input { margin: 0; } .vx .palc .addrow .btn { margin: 0; padding: 12px 10px; font-size: 12px; text-transform: none; }
+
+/* ===== Vistas del cruce (personal) y reporte del auxiliar ===== */
+.tbl-vs { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; margin: 8px 0; }
+.tbl-vs th { background: #0f2150; color: #fff; padding: 8px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
+.tbl-vs td { padding: 7px 8px; border-bottom: 1px solid #e3e8f1; vertical-align: top; }
+.tbl-vs input[type=text], .tbl-vs input[type=number], .filtros-vs input, .filtros-vs select { padding: 7px 8px; border: 1.5px solid #c3cbd9; border-radius: 8px; font-size: 13px; }
+.filtros-vs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; font-size: 13px; }
+.vx .tbl-stock th { font-size: 12px; padding: 8px 6px; } .vx .tbl-stock td { padding: 8px 6px; font-size: 13px; }
+.vx .reab { border: 1px solid #0f2150; background: #fff; color: #0f2150; border-radius: 16px; padding: 5px 12px; font-weight: 700; cursor: pointer; margin-top: 8px; font-size: 13px; }
