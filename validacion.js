@@ -617,7 +617,7 @@ const VAL = (function () {
     const f = (ST.fases || []).find(x => x.fase === fase) || { fase };
     c.innerHTML = '<div class="vx" style="max-width:900px"><div class="top"><span class="tag">' + E(f.canal_sistema || "") + " | " + E(f.canal_fisico || "") + '</span><span><button class="btn w sm" id="fd-refresh" style="margin-right:6px">🔄 Actualizar</button><button class="btn w sm" id="fd-volver">← Volver a fases</button></span></div>' +
       '<div class="fofase">FO: ' + E(f.fo || "-") + " · FASE: " + E(fase) + " · " + E(f.estado || "") + (f.validador ? " · Validador: " + E(f.validador) : "") + "</div>" +
-      '<div class="tabs" style="max-width:640px"><button data-fd="reg">📋 Registros</button><button data-fd="stock">📦 Stock entregas</button><button data-fd="pick">🧾 Picking</button></div>' +
+      '<div class="tabs" style="max-width:860px"><button data-fd="reg">📋 Registros</button><button data-fd="pal">✏️ Paletas</button><button data-fd="stock">📦 Stock entregas</button><button data-fd="pick">🧾 Picking</button></div>' +
       (f.estado === "CERRADO" ? '<p class="rel"><button class="reab" data-reabrir="' + E(fase) + '">↩ Reabrir fase</button></p>' : "") + '<div id="cr-vista" style="margin-top:8px"></div></div>';
     q("#fd-volver").onclick = () => { ST.soloFase = null; ST.soloFaseId = null; ST.refrescar = null; staffFases(c); };
     const rb = c.querySelector("[data-reabrir]"); if (rb) rb.onclick = async () => { if (!confirm("¿Reabrir la fase " + fase + "?\n\nVolverá a EN PROCESO y el validador podrá seguir contando.")) return; const { error } = await sb().rpc("val_reabrir_fase", { p_fase: fase }); if (error) return alert(error.message); toast("Fase reabierta"); staffFases(c); };
@@ -633,10 +633,8 @@ const VAL = (function () {
           const pal = Object.values(P).sort((a, b) => a.paleta - b.paleta), tot = regs.reduce((t0, r) => t0 + r.cantidad, 0);
           let est = []; try { const r2 = await sb().rpc("val_vista_stock", { p_fase: fase, p_vista: "FASE" }); est = r2.data || []; } catch (e) {}
           cu.innerHTML = '<div class="kpis"><div class="kpi"><b>' + pal.length + '</b><span>paletas registradas</span></div><div class="kpi"><b>' + tot + '</b><span>bultos contados</span></div><div class="kpi"><b>' + new Set(regs.map(r => r.codigo)).size + '</b><span>códigos distintos</span></div></div>' +
-            (pal.length ? '<p class="rel">Puedes <b>corregir cualquier paleta</b> (HU, cantidades, agregar o quitar códigos) aunque la validación ya esté cerrada. Cada cambio queda registrado.</p><div id="fd-pal" class="vx cajas"></div>' : '<div class="avisos">El validador todavía no ha registrado paletas en esta fase.</div>') +
             '<h4 style="margin:18px 0 6px">Cantidad total que debe tener la fase, por código</h4>' +
             '<div class="filtros-vs"><input type="text" id="fd-q" placeholder="🔎 Buscar por código o descripción" style="min-width:260px"><button class="btn-v g" id="fd-act" style="margin:0">🔄 Actualizar</button><label style="display:inline-flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="fd-dif"> Solo diferencias</label><span class="rel" id="fd-n"></span></div><div id="fd-est"></div>';
-          if (pal.length) editorPaletas(q("#fd-pal"), { fase, paletas: pal.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.descripcion || "", cant: x.cantidad })) })), st: {}, editable: true, motivo: "Corrección de la asistente/administradora", recargar: () => abrir("reg") });
           const pintarEst = () => {
             const t = (q("#fd-q").value || "").toUpperCase().trim(), dif = q("#fd-dif").checked;
             const fl = est.filter(x => (!t || (String(x.codigo) + " " + (x.descripcion || "")).toUpperCase().includes(t)) && (!dif || x.status !== "CUADRADO"));
@@ -646,6 +644,13 @@ const VAL = (function () {
           };
           q("#fd-q").oninput = pintarEst; q("#fd-dif").onchange = pintarEst; q("#fd-act").onclick = () => { toast("Actualizando…"); abrir("reg"); };
           pintarEst();
+        } else if (t === "pal") {
+          const regs = await leerTodo((a, b) => sb().from("val_registros").select("paleta,hu,codigo,descripcion,cantidad,creado").eq("fase", fase).order("paleta").order("id").range(a, b));
+          const P = {}; regs.forEach(r => { (P[r.paleta] = P[r.paleta] || { paleta: r.paleta, hu: r.hu, items: [] }).items.push(r); });
+          const pal = Object.values(P).sort((a, b) => a.paleta - b.paleta), tot = regs.reduce((t0, r) => t0 + r.cantidad, 0);
+          cu.innerHTML = '<div class="kpis"><div class="kpi"><b>' + pal.length + '</b><span>paletas registradas</span></div><div class="kpi"><b>' + tot + '</b><span>bultos contados</span></div><div class="kpi"><b>' + new Set(regs.map(r => r.codigo)).size + '</b><span>códigos distintos</span></div></div>' +
+            (pal.length ? '<p class="rel">Puedes <b>corregir cualquier paleta</b> (HU, cantidades, agregar o quitar códigos) aunque la validación ya esté cerrada. Cada cambio queda registrado.</p><div id="fd-pal" class="vx cajas"></div>' : '<div class="avisos">El validador todavía no ha registrado paletas en esta fase.</div>');
+          if (pal.length) editorPaletas(q("#fd-pal"), { fase, paletas: pal.map(p => ({ paleta: p.paleta, hu: p.hu, items: p.items.map(x => ({ codigo: x.codigo, desc: x.descripcion || "", cant: x.cantidad })) })), st: {}, editable: true, motivo: "Corrección de la asistente/administradora", recargar: () => abrir("pal") });
         } else if (t === "stock") { const { dat, res } = await cargar(); ST.vista = "stock"; ST.soloFaseId = fase; ST.soloFase = new Set(dat.stock.filter(x => !x.fase || window.CRUCE.clean(x.fase) === window.CRUCE.clean(fase)).map(x => window.CRUCE.clean(x.material))); staffVistaStock(res, dat); }
         else { const { dat, res } = await cargar(); ST.vista = "pick"; ST.fp = ST.fp || {}; ST.fp.fase = window.CRUCE.clean(fase); staffVistaPicking(res, dat); }
       } catch (e) { cu.innerHTML = '<div class="avisos">' + E(e.message || e) + "</div>"; }
