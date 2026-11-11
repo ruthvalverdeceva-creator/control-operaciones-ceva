@@ -597,7 +597,7 @@ const VAL = (function () {
   /* ---- Detalle de una fase para la administradora / asistente (como la pantalla del auxiliar) ---- */
   async function staffFaseDetalle(c, fase) {
     const f = (ST.fases || []).find(x => x.fase === fase) || { fase };
-    c.innerHTML = '<div class="vx" style="max-width:900px"><div class="top"><span class="tag">' + E(f.canal_sistema || "") + " | " + E(f.canal_fisico || "") + '</span><button class="btn w sm" id="fd-volver">← Volver a fases</button></div>' +
+    c.innerHTML = '<div class="vx" style="max-width:900px"><div class="top"><span class="tag">' + E(f.canal_sistema || "") + " | " + E(f.canal_fisico || "") + '</span><span><button class="btn w sm" id="fd-refresh" style="margin-right:6px">🔄 Actualizar</button><button class="btn w sm" id="fd-volver">← Volver a fases</button></span></div>' +
       '<div class="fofase">FO: ' + E(f.fo || "-") + " · FASE: " + E(fase) + " · " + E(f.estado || "") + (f.validador ? " · Validador: " + E(f.validador) : "") + "</div>" +
       '<div class="tabs" style="max-width:640px"><button data-fd="reg">📋 Registros</button><button data-fd="stock">📦 Stock entregas</button><button data-fd="pick">🧾 Picking</button></div>' +
       (f.estado === "CERRADO" ? '<p class="rel"><button class="reab" data-reabrir="' + E(fase) + '">↩ Reabrir fase</button></p>' : "") + '<div id="cr-vista" style="margin-top:8px"></div></div>';
@@ -616,12 +616,24 @@ const VAL = (function () {
           let est = []; try { const r2 = await sb().rpc("val_vista_stock", { p_fase: fase, p_vista: "FASE" }); est = r2.data || []; } catch (e) {}
           cu.innerHTML = '<div class="kpis"><div class="kpi"><b>' + pal.length + '</b><span>paletas registradas</span></div><div class="kpi"><b>' + tot + '</b><span>bultos contados</span></div><div class="kpi"><b>' + new Set(regs.map(r => r.codigo)).size + '</b><span>códigos distintos</span></div></div>' +
             (pal.length ? '<div class="cajas">' + pal.map(p => '<div class="caja"><h4>PALETA ' + p.paleta + " · " + p.items.reduce((t0, x) => t0 + x.cantidad, 0) + ' bultos</h4><p><b>HU:</b> ' + E(p.hu) + (p.t ? " · " + E(fmtTs(p.t)) : "") + "</p>" + p.items.map(x => "<div style='display:flex;justify-content:space-between;gap:8px;border-top:1px solid #e5e8ef;padding:4px 0'><span><b>" + E(x.codigo) + "</b><br><span class='rel' style='font-size:11px'>" + E(x.descripcion || "") + "</span></span><b>" + x.cantidad + "</b></div>").join("") + "</div>").join("") + "</div>" : '<div class="avisos">El validador todavía no ha registrado paletas en esta fase.</div>') +
-            (est.length ? "<h4 style='margin:16px 0 4px'>Estado por código (solicitado vs. conteo de esta fase)</h4>" + tablaStockHTML(est, true) : "");
+            '<h4 style="margin:18px 0 6px">Cantidad total que debe tener la fase, por código</h4>' +
+            '<div class="filtros-vs"><input type="text" id="fd-q" placeholder="🔎 Buscar por código o descripción" style="min-width:260px"><button class="btn-v g" id="fd-act" style="margin:0">🔄 Actualizar</button><label style="display:inline-flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="fd-dif"> Solo diferencias</label><span class="rel" id="fd-n"></span></div><div id="fd-est"></div>';
+          const pintarEst = () => {
+            const t = (q("#fd-q").value || "").toUpperCase().trim(), dif = q("#fd-dif").checked;
+            const fl = est.filter(x => (!t || (String(x.codigo) + " " + (x.descripcion || "")).toUpperCase().includes(t)) && (!dif || x.status !== "CUADRADO"));
+            q("#fd-n").textContent = fl.length + " de " + est.length + " códigos";
+            q("#fd-est").innerHTML = '<div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Código</th><th>Descripción</th><th>UN</th><th>Debe ser (total fase)</th><th>Contado</th><th>Dif.</th><th>Status</th><th>Comentario</th></tr>' +
+              (fl.map(x => "<tr><td><b>" + E(x.codigo) + "</b></td><td>" + E(x.descripcion || "") + "</td><td>" + E(x.un || "") + "</td><td style='font-size:15px'><b>" + x.solicitado + "</b></td><td><b>" + x.contado + "</b></td><td style='font-weight:800;color:" + (x.diferencia < 0 ? "#e30a17" : x.diferencia > 0 ? "#d98a00" : "#00a862") + "'>" + (x.diferencia > 0 ? "+" : "") + x.diferencia + "</td><td style='font-weight:800;color:" + (ESTADO_COLOR[x.status] || "#333") + "'>" + E(x.status) + "</td><td class='d'>" + E(x.comentario || "") + "</td></tr>").join("") || '<tr><td colspan="8" style="color:#888">Sin códigos para mostrar.</td></tr>') + "</table></div>";
+          };
+          q("#fd-q").oninput = pintarEst; q("#fd-dif").onchange = pintarEst; q("#fd-act").onclick = () => { toast("Actualizando…"); abrir("reg"); };
+          pintarEst();
         } else if (t === "stock") { const { dat, res } = await cargar(); ST.vista = "stock"; ST.soloFase = new Set(dat.stock.filter(x => !x.fase || window.CRUCE.clean(x.fase) === window.CRUCE.clean(fase)).map(x => window.CRUCE.clean(x.material))); staffVistaStock(res, dat); }
         else { const { dat, res } = await cargar(); ST.vista = "pick"; ST.fp = ST.fp || {}; ST.fp.fase = window.CRUCE.clean(fase); staffVistaPicking(res, dat); }
       } catch (e) { cu.innerHTML = '<div class="avisos">' + E(e.message || e) + "</div>"; }
     };
-    c.querySelectorAll("[data-fd]").forEach(b => b.onclick = () => abrir(b.dataset.fd));
+    let actual = "reg";
+    c.querySelectorAll("[data-fd]").forEach(b => b.onclick = () => { actual = b.dataset.fd; abrir(actual); });
+    q("#fd-refresh").onclick = () => { cache = null; toast("Actualizando…"); abrir(actual); };
     abrir("reg");
   }
 
