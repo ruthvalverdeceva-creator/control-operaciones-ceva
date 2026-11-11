@@ -183,15 +183,15 @@ const VAL = (function () {
     r.innerHTML = marco(
       '<div class="top"><span class="tag">' + E(i.canal_sistema || "") + " | " + E(i.canal_fisico || "") + " " + conoHTML(i.cono) + '</span><button class="btn r" id="x-fin">Finalizar auditoría</button></div>' +
       '<div class="fofase">FO: ' + E(i.fo || "-") + " · FASE: " + E(V.fase) + "</div>" +
-      '<div class="barra"><span class="pn">Paleta ' + pal + '</span><button class="btn w" id="x-borrar">Borrar</button><button class="btn o" id="x-menu">Menú</button></div>' +
-      '<label>1° HU DE LA PALETA (escanee la etiqueta)</label>' +
+      '<div class="barra"><span class="pn">Paleta ' + pal + '</span><button class="btn w" id="x-borrar">Borrar</button><button class="btn o" id="x-menu">Ver registros</button></div>' +
+      '<div class="paso"><label>1° HU DE LA PALETA (escanee la etiqueta)</label>' +
       '<div class="hurow"><input id="x-hu" placeholder="ESCANEE EL HU" autocomplete="off" autocapitalize="characters" value="' + E(V.sn ? "SN" : V.hu) + '"' + (V.sn ? " readonly" : "") + '><button class="btn o" id="x-sn">SN</button></div>' +
-      '<div class="hint">Sin etiqueta o ilegible: pulse SN. El sistema le asigna el HU real por los códigos y cantidades.</div>' +
-      '<div class="row2"><div><label>SKU / EAN</label><input id="x-sku" placeholder="Escanee SKU o EAN" autocomplete="off" autocapitalize="characters" value="' + E(V.mara ? V.mara.codigo : "") + '"></div>' +
+      '<div class="hint">Sin etiqueta o ilegible: pulse SN. El sistema le asigna el HU real por los códigos y cantidades.</div></div>' +
+      '<div class="paso"><div class="row2"><div><label>SKU / EAN</label><input id="x-sku" placeholder="Escanee SKU o EAN" autocomplete="off" autocapitalize="characters" value="' + E(V.mara ? V.mara.codigo : "") + '"></div>' +
       '<div><label>UMA</label><input id="x-uma" readonly value="' + E(V.mara ? V.mara.uma || "" : "") + '"></div></div>' +
       '<label>DESCRIPCIÓN:</label><input id="x-desc" readonly value="' + E(V.mara ? V.mara.descripcion : "") + '">' +
-      '<div class="msg" id="x-msg"></div>' +
-      '<label>CANTIDAD (bultos)</label><div class="row3"><input id="x-cant" class="big" type="number" inputmode="numeric" min="1" placeholder="Cantidad"><button class="btn" id="x-add">Agregar código</button></div>' +
+      '<div class="msg" id="x-msg"></div></div>' +
+      '<div class="paso"><label>CANTIDAD (bultos)</label><div class="row3"><input id="x-cant" class="big" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Cantidad"><button class="btn" id="x-add">Agregar código</button></div></div>' +
       '<table><tr><th>Código</th><th>Desc.</th><th>Cant</th><th>Acción</th></tr>' +
       (V.items.length ? V.items.map((it, k) => "<tr><td>" + E(it.codigo) + '</td><td class="d">' + E(it.desc) + "</td><td><b>" + it.cant + '</b></td><td><button class="ic" data-del="' + k + '">🗑️</button></td></tr>').join("") :
         '<tr><td colspan="4" style="color:#888">Aún no agregas productos a esta paleta.</td></tr>') + "</table>" +
@@ -199,11 +199,16 @@ const VAL = (function () {
       '<div class="back"><a id="x-volver">🏠 Volver al menú</a></div>' +
       '<div class="modal-vx" id="x-modal"><div id="x-modal-in"></div></div>');
     const hu = q("#x-hu"), sku = q("#x-sku"), cant = q("#x-cant");
-    hu.oninput = () => { V.hu = hu.value.toUpperCase().replace(/\s/g, ""); };
-    hu.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); sku.focus(); } };
+    // Escáner: al terminar de leer el HU salta solo al SKU/EAN; al terminar el SKU/EAN busca y salta a la cantidad.
+    let tHu = null, tSku = null;
+    hu.oninput = () => { V.hu = hu.value.toUpperCase().replace(/\s/g, ""); clearTimeout(tHu); if (V.hu.length >= 10) tHu = setTimeout(() => { if (q("#x-hu") === hu && V.hu) sku.focus(); }, 350); };
+    hu.onkeydown = e => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); clearTimeout(tHu); sku.focus(); } };
+    hu.onchange = () => { if (V.hu) sku.focus(); };
+    cant.oninput = () => { const d = cant.value.replace(/\D/g, ""); if (d !== cant.value) cant.value = d; };
     q("#x-sn").onclick = () => { V.sn = !V.sn; if (V.sn) { V.hu = ""; } auxPintarValidar(); if (V.sn) sku.focus(); };
-    sku.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); auxBuscar(); } };
-    sku.onchange = () => auxBuscar();
+    sku.oninput = () => { clearTimeout(tSku); if (sku.value.trim().length >= 7) tSku = setTimeout(() => { if (q("#x-sku") === sku) auxBuscar(); }, 350); };
+    sku.onkeydown = e => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); clearTimeout(tSku); auxBuscar(); } };
+    sku.onchange = () => { clearTimeout(tSku); if (!V.mara || V.mara.codigo !== sku.value.trim()) auxBuscar(); };
     cant.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); auxAgregar(); } };
     q("#x-add").onclick = auxAgregar;
     r.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { V.items.splice(Number(b.dataset.del), 1); auxPintarValidar(); });
@@ -219,7 +224,8 @@ const VAL = (function () {
     const V = AX.V; if (!V || !q("#x-sku")) return;
     const c = (q("#x-sku").value || "").trim().toUpperCase().replace(/^S/, "").replace(/[^A-Z0-9]/g, "");
     if (!c) { V.mara = null; q("#x-uma").value = ""; q("#x-desc").value = ""; return; }
-    const { data, error } = await sb().from("val_mara").select("codigo,descripcion,uma,ean").or("codigo.eq." + c + ",ean.eq." + c).limit(1);
+    if (V.mara && V.mara.codigo === c && q("#x-desc").value) { q("#x-cant").focus(); return; }
+    const { data, error } = await sb().rpc("val_buscar_producto", { p_txt: c });
     if (!q("#x-sku")) return; // la pantalla cambió mientras buscaba
     if (error) return auxMsg("No se pudo buscar el código: " + error.message, "bad");
     if (!data || !data.length) { V.mara = null; q("#x-uma").value = ""; q("#x-desc").value = ""; return auxMsg("Código no encontrado en el catálogo (MARA). Revisa el SKU/EAN o avisa a la administradora.", "bad"); }
@@ -308,8 +314,8 @@ const VAL = (function () {
     const pintar = () => {
       cu.innerHTML = (V.ed.length ? V.ed.map((p, pi) => '<div class="palc"><div class="ph"><b>PALETA ' + p.paleta + "</b><b>" + tot(p) + ' bultos</b></div>' +
         '<div class="hurow2"><label>HU</label><input data-hu="' + pi + '" value="' + E(p.hu) + '" autocapitalize="characters"></div>' +
-        p.items.map((x, k) => '<div class="it"><div><b>' + E(x.codigo) + '</b><small>' + E(x.desc) + '</small></div><input type="number" inputmode="numeric" min="1" data-q="' + pi + "|" + k + '" value="' + x.cant + '"><button class="ic" data-x="' + pi + "|" + k + '">🗑️</button></div>').join("") +
-        '<div class="addrow"><input data-nc="' + pi + '" placeholder="+ Código o EAN" value="' + E(p.nc) + '" autocapitalize="characters"><input data-nq="' + pi + '" type="number" inputmode="numeric" placeholder="Cant." value="' + E(p.nq) + '"><button class="btn w" data-add="' + pi + '">Agregar</button></div>' +
+        p.items.map((x, k) => '<div class="it"><div><b>' + E(x.codigo) + '</b><small>' + E(x.desc) + '</small></div><input type="text" inputmode="numeric" pattern="[0-9]*" data-q="' + pi + "|" + k + '" value="' + x.cant + '"><button class="ic" data-x="' + pi + "|" + k + '">🗑️</button></div>').join("") +
+        '<div class="addrow"><input data-nc="' + pi + '" placeholder="+ Código o EAN" value="' + E(p.nc) + '" autocapitalize="characters"><input data-nq="' + pi + '" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Cant." value="' + E(p.nq) + '"><button class="btn w" data-add="' + pi + '">Agregar</button></div>' +
         (p.msg ? '<div class="msg bad">' + E(p.msg) + "</div>" : "") + '<button class="btn" data-save="' + pi + '">Guardar paleta ' + p.paleta + "</button></div>").join("") : '<p style="text-align:center;color:#777">Todavía no hay paletas guardadas.</p>');
       cu.querySelectorAll("[data-hu]").forEach(e => e.oninput = () => { V.ed[+e.dataset.hu].hu = e.value.toUpperCase().replace(/\s/g, ""); });
       cu.querySelectorAll("[data-q]").forEach(e => e.onchange = () => { const [a, b] = e.dataset.q.split("|"); V.ed[+a].items[+b].cant = e.value; pintar(); });
@@ -320,7 +326,7 @@ const VAL = (function () {
         const p = V.ed[+e.dataset.add], c = (p.nc || "").trim().toUpperCase().replace(/^S/, "").replace(/[^A-Z0-9]/g, ""), n = Number(p.nq); p.msg = "";
         if (!c) { p.msg = "Escribe el código o EAN."; return pintar(); }
         if (!p.nq || !Number.isInteger(n) || n < 1) { p.msg = "Escribe una cantidad entera mayor a 0."; return pintar(); }
-        const { data, error } = await sb().from("val_mara").select("codigo,descripcion").or("codigo.eq." + c + ",ean.eq." + c).limit(1);
+        const { data, error } = await sb().rpc("val_buscar_producto", { p_txt: c });
         if (error || !data || !data.length) { p.msg = "Código no encontrado en el catálogo (MARA)."; return pintar(); }
         const ya = p.items.find(x => x.codigo === data[0].codigo); if (ya) ya.cant = (Number(ya.cant) || 0) + n; else p.items.push({ codigo: data[0].codigo, desc: data[0].descripcion, cant: n });
         p.nc = ""; p.nq = ""; pintar();
@@ -556,14 +562,20 @@ const VAL = (function () {
   }
   async function datosFO(fo) {
     const por = (t, cols, col, ord) => leerTodo((a, b) => sb().from(t).select(cols).eq(col, fo).order(ord || "id").range(a, b));
-    const [fases, stock, regs, com] = await Promise.all([
-      por("val_fases", "fase,fo,canal_sistema,canal_fisico,cono,estado,inicio,fin", "fo", "fase"), por("val_esperado", "fase,material,descripcion,un,cantidad", "fo"),
-      por("val_registros", "fase,paleta,hu,codigo,descripcion,cantidad,creado", "fo"), por("val_comentarios", "fase,codigo,comentario,usuario,actualizado", "fo", "fase")]);
+    const [fases, stock0, regs0, com] = await Promise.all([
+      por("val_fases", "fase,fo,canal_sistema,canal_fisico,cono,estado,inicio,fin,validador,cliente,transportista,placa,asistente_despacho,rampa,destino", "fo", "fase"), por("val_esperado", "id,fase,material,descripcion,un,cantidad", "fo"),
+      por("val_registros", "id,fase,paleta,hu,codigo,descripcion,cantidad,creado", "fo"), por("val_comentarios", "fase,codigo,comentario,usuario,actualizado", "fo", "fase")]);
     const fasesIds = fases.map(f => f.fase);
-    let pick = await por("val_picking", "fase,status,hu,producto,descripcion,ctd_prev,ctd_real,confirmado_por,fecha_conf,hora_conf", "fo");
-    if (fasesIds.length) { // picking de las fases del viaje aunque no tenga FO
-      const extra = []; for (let i = 0; i < fasesIds.length; i += 40) extra.push(...await leerTodo((a, b) => sb().from("val_picking").select("id,fase,status,hu,producto,descripcion,ctd_prev,ctd_real,confirmado_por,fecha_conf,hora_conf").in("fase", fasesIds.slice(i, i + 40)).is("fo", null).order("id").range(a, b)));
-      pick = pick.concat(extra);
+    let pick = await por("val_picking", "id,fase,status,hu,producto,descripcion,ctd_prev,ctd_real,confirmado_por,fecha_conf,hora_conf", "fo");
+    let stock = stock0, regs = regs0;
+    // También lo que esté cargado a nombre de las fases del viaje, aunque su FO venga vacío o distinto
+    const porFases = async (t, cols, base) => { const vistos = new Set(base.map(x => x.id)), extra = [];
+      for (let i = 0; i < fasesIds.length; i += 40) (await leerTodo((a, b) => sb().from(t).select(cols).in("fase", fasesIds.slice(i, i + 40)).order("id").range(a, b))).forEach(x => { if (!vistos.has(x.id)) { vistos.add(x.id); extra.push(x); } });
+      return base.concat(extra); };
+    if (fasesIds.length) {
+      pick = await porFases("val_picking", "id,fase,status,hu,producto,descripcion,ctd_prev,ctd_real,confirmado_por,fecha_conf,hora_conf", pick);
+      stock = await porFases("val_esperado", "id,fase,material,descripcion,un,cantidad", stock);
+      regs = await porFases("val_registros", "id,fase,paleta,hu,codigo,descripcion,cantidad,creado", regs);
     }
     const pic = await leerTodo((a, b) => sb().from("val_picadores").select("usuario,nombre,supervisor,grupo").order("usuario").range(a, b)), U = {};
     pic.forEach(p => { U[String(p.usuario).toUpperCase()] = [{ nombre: p.nombre, sup: p.supervisor, grupo: p.grupo || "" }]; });
@@ -574,7 +586,7 @@ const VAL = (function () {
   }
   async function staffCalcular() {
     const fo = q("#cr-fo").value, out = q("#cr-out"); if (!fo) return;
-    ST.fo = fo; ST.soloFase = null; ST.refrescar = null; if (ST.fp) ST.fp.fase = ""; out.innerHTML = '<p class="rel">Calculando…</p>';
+    ST.fo = fo; ST.soloFase = null; ST.soloFaseId = null; ST.refrescar = null; if (ST.fp) ST.fp.fase = ""; out.innerHTML = '<p class="rel">Calculando…</p>';
     try {
       const dat = await datosFO(fo);
       if (!dat.stock.length) { out.innerHTML = '<div class="avisos">⚠ Este viaje no tiene STOCK ENTREGA cargado, así que no se puede cruzar. ' + (ST.esAdmin ? "Súbelo en «Cargar datos»." : "Pídele a la administradora que lo suba.") + "</div>"; return; }
@@ -601,7 +613,7 @@ const VAL = (function () {
       '<div class="fofase">FO: ' + E(f.fo || "-") + " · FASE: " + E(fase) + " · " + E(f.estado || "") + (f.validador ? " · Validador: " + E(f.validador) : "") + "</div>" +
       '<div class="tabs" style="max-width:640px"><button data-fd="reg">📋 Registros</button><button data-fd="stock">📦 Stock entregas</button><button data-fd="pick">🧾 Picking</button></div>' +
       (f.estado === "CERRADO" ? '<p class="rel"><button class="reab" data-reabrir="' + E(fase) + '">↩ Reabrir fase</button></p>' : "") + '<div id="cr-vista" style="margin-top:8px"></div></div>';
-    q("#fd-volver").onclick = () => { ST.soloFase = null; ST.refrescar = null; staffFases(c); };
+    q("#fd-volver").onclick = () => { ST.soloFase = null; ST.soloFaseId = null; ST.refrescar = null; staffFases(c); };
     const rb = c.querySelector("[data-reabrir]"); if (rb) rb.onclick = async () => { if (!confirm("¿Reabrir la fase " + fase + "?\n\nVolverá a EN PROCESO y el validador podrá seguir contando.")) return; const { error } = await sb().rpc("val_reabrir_fase", { p_fase: fase }); if (error) return alert(error.message); toast("Fase reabierta"); staffFases(c); };
     let cache = null; ST.refrescar = () => { cache = null; abrir("stock"); };
     const cargar = async () => { if (cache) return cache; if (!f.fo) throw new Error("Esta fase todavía no tiene viaje (FO) asignado, por eso no hay cruce. Carga el MONITOR o espera la sincronización del Drive."); const dat = await datosFO(f.fo); if (!dat.stock.length) throw new Error("Este viaje no tiene STOCK ENTREGA cargado."); cache = { dat, res: window.CRUCE.cruceFO(dat) }; return cache; };
@@ -627,7 +639,7 @@ const VAL = (function () {
           };
           q("#fd-q").oninput = pintarEst; q("#fd-dif").onchange = pintarEst; q("#fd-act").onclick = () => { toast("Actualizando…"); abrir("reg"); };
           pintarEst();
-        } else if (t === "stock") { const { dat, res } = await cargar(); ST.vista = "stock"; ST.soloFase = new Set(dat.stock.filter(x => !x.fase || window.CRUCE.clean(x.fase) === window.CRUCE.clean(fase)).map(x => window.CRUCE.clean(x.material))); staffVistaStock(res, dat); }
+        } else if (t === "stock") { const { dat, res } = await cargar(); ST.vista = "stock"; ST.soloFaseId = fase; ST.soloFase = new Set(dat.stock.filter(x => !x.fase || window.CRUCE.clean(x.fase) === window.CRUCE.clean(fase)).map(x => window.CRUCE.clean(x.material))); staffVistaStock(res, dat); }
         else { const { dat, res } = await cargar(); ST.vista = "pick"; ST.fp = ST.fp || {}; ST.fp.fase = window.CRUCE.clean(fase); staffVistaPicking(res, dat); }
       } catch (e) { cu.innerHTML = '<div class="avisos">' + E(e.message || e) + "</div>"; }
     };
@@ -639,6 +651,25 @@ const VAL = (function () {
 
   /* ---- Vistas del cruce en pantalla: formato STOCK ENTREGAS (con comentarios) y detalle de PICKING ---- */
   const fechaDT = (f, h) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(f || "").trim()); if (!m) return null; const t = /^(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(h || "").trim()); return new Date(+m[3], +m[2] - 1, +m[1], t ? +t[1] : 0, t ? +t[2] : 0, t ? +(t[3] || 0) : 0); };
+
+  /* Encabezado de las descargas: datos de despacho, preparación (picking) y validación por fase */
+  const fmtDT = d => d ? String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + ":" + String(d.getSeconds()).padStart(2, "0") : "";
+  function encabezadoFases(dat, soloFase) {
+    const fs = dat.fases.filter(f => !soloFase || window.CRUCE.clean(f.fase) === window.CRUCE.clean(soloFase));
+    const cab = ["FASE", "CANAL SISTEMA", "CANAL FÍSICO", "CONO", "TRANSPORTE", "PLACA", "ASISTENTE DESPACHO", "VALIDADOR", "INICIO PREPARACIÓN", "FIN PREPARACIÓN", "INICIO VALIDACIÓN", "FIN VALIDACIÓN"];
+    const filas = fs.map(f => {
+      const ts = dat.pick.filter(r => window.CRUCE.clean(r.fase) === window.CRUCE.clean(f.fase) && String(r.status || "").toUpperCase() === "C").map(r => fechaDT(r.fecha_conf, r.hora_conf)).filter(Boolean).sort((a, b) => a - b);
+      return [String(f.fase), f.canal_sistema || "", f.canal_fisico || "", f.cono || "", f.transportista || "", f.placa || "", f.asistente_despacho || "", f.validador || "", fmtDT(ts[0]), fmtDT(ts[ts.length - 1]), f.inicio ? fmtDT(new Date(f.inicio)) : "", f.fin ? fmtDT(new Date(f.fin)) : ""];
+    });
+    return { cab, filas };
+  }
+  function xlsConEncabezado(nombre, hoja, titulo, dat, soloFase, cabTabla, filas, anchos) {
+    const e = encabezadoFases(dat, soloFase), n = Math.max(e.cab.length, cabTabla.length);
+    const aoa = [[titulo], [], e.cab].concat(e.filas, [[]], [cabTabla], filas);
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = Array.from({ length: n }, (_, i) => ({ wch: Math.max(anchos[i] || 10, (e.cab[i] || "").length + 2, 14) }));
+    XLSX.utils.book_append_sheet(wb, ws, hoja); XLSX.writeFile(wb, nombre); toast("Excel descargado ✔");
+  }
   function staffVista(res, dat) { if (ST.vista === "pick") staffVistaPicking(res, dat); else staffVistaStock(res, dat); }
   function xlsSimple(nombre, hoja, aoa, anchos) { const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = anchos.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, hoja); XLSX.writeFile(wb, nombre); toast("Excel descargado ✔"); }
 
@@ -656,11 +687,11 @@ const VAL = (function () {
         filas.map((f, i) => { const c = window.CRUCE.clean(f.codigo), fa = faseDe[c] || fb, ex = (COM[c] || []).find(x => window.CRUCE.clean(x.fase) === fa) || (COM[c] || [])[0];
           const falta = f.status === "FALTANTE" || f.status === "PENDIENTE" || f.status === "AJUSTE";
           return "<tr><td><b>" + E(f.codigo) + "</b></td><td>" + E(f.desc || "") + "</td><td>" + E(f.un || "") + "</td><td>" + f.esp + "</td><td><b>" + f.reg + "</b></td><td style='font-weight:800;color:" + (f.dif < 0 ? "#e30a17" : f.dif > 0 ? "#d98a00" : "#00a862") + "'>" + (f.dif > 0 ? "+" : "") + f.dif + "</td><td style='font-weight:800;color:" + (ESTADO_COLOR[f.status] || "#333") + "'>" + E(f.status) + "</td>" +
-            '<td style="min-width:300px"><div style="display:flex;gap:6px;flex-wrap:wrap">' + (falta ? '<input type="number" min="1" placeholder="No cargado" data-n="' + i + '" style="width:92px" title="Cajas que NO se cargaron en el camión">' : "") +
-            '<input type="text" data-t="' + i + '" value="' + E(ex ? ex.comentario : "") + '" placeholder="Comentario (ej. ajuste por capacidad del transporte)" style="flex:1;min-width:160px"><button class="btn-v" data-g="' + i + '" style="margin:0">💾</button></div>' +
-            (ex && ex.usuario ? '<div class="rel" style="font-size:11px">Por ' + E(ex.usuario) + (ex.actualizado ? " · " + fmtTs(ex.actualizado) : "") + "</div>" : "") + "</td></tr>"; }).join("") + "</table></div>";
+            '<td class="com"><div class="comrow' + (falta ? "" : " sin-n") + '">' + (falta ? '<input type="number" min="1" placeholder="No cargado" data-n="' + i + '" title="Cajas que NO se cargaron en el camión">' : "") +
+            '<input type="text" data-t="' + i + '" value="' + E(ex ? ex.comentario : "") + '" placeholder="Comentario (ej. ajuste por capacidad del transporte)"><button class="btn-v" data-g="' + i + '" title="Guardar comentario">💾</button></div>' +
+            (ex && ex.usuario ? '<div class="quien">Por ' + E(ex.usuario) + (ex.actualizado ? " · " + fmtTs(ex.actualizado) : "") + "</div>" : "") + "</td></tr>"; }).join("") + "</table></div>";
       q("#vs-solo").onchange = e => { ST.soloDif = e.target.checked; solo = ST.soloDif; pintar(); };
-      q("#vs-xls").onclick = () => xlsSimple("STOCK_ENTREGAS_FO_" + res.fo + ".xlsx", "STOCK ENTREGAS", [["VIAJE", "CODIGO", "DESCRIPCION", "UN", "SOLICITADO", "CONTEO", "DIFERENCIA", "STATUS", "COMENTARIO"]].concat(filas.map(f => { const c = window.CRUCE.clean(f.codigo), l = (COM[c] || []).map(x => x.comentario).join(" | "); return [String(res.fo), String(f.codigo), f.desc, f.un, f.esp, f.reg, f.dif, f.status, l]; })), [14, 14, 44, 6, 11, 9, 11, 14, 60]);
+      q("#vs-xls").onclick = () => xlsConEncabezado("STOCK_ENTREGAS_FO_" + res.fo + ".xlsx", "STOCK ENTREGAS", "STOCK ENTREGAS · FO " + res.fo, dat, ST.soloFaseId || null, ["VIAJE", "CODIGO", "DESCRIPCION", "UN", "SOLICITADO", "CONTEO", "DIFERENCIA", "STATUS", "COMENTARIO"], filas.map(f => { const c = window.CRUCE.clean(f.codigo), l = (COM[c] || []).map(x => x.comentario).join(" | "); return [String(res.fo), String(f.codigo), f.desc, f.un, f.esp, f.reg, f.dif, f.status, l]; }), [14, 14, 44, 6, 11, 9, 11, 14, 60]);
       cu.querySelectorAll("[data-g]").forEach(b => b.onclick = async () => {
         const i = +b.dataset.g, f = filas[i], c = window.CRUCE.clean(f.codigo), fa = faseDe[c] || fb;
         if (!fa) return alert("No encuentro la fase de este código.");
@@ -703,7 +734,7 @@ const VAL = (function () {
       q("#vp-fase").onchange = e => { F.fase = e.target.value ? window.CRUCE.clean(e.target.value) : ""; pintar(); };
       en("#vp-d1", "d1"); en("#vp-d2", "d2"); en("#vp-des", "despues");
       const qi = q("#vp-q"); qi.onchange = () => { F.q = qi.value; pintar(); };
-      q("#vp-xls").onclick = () => xlsSimple("PICKING_FO_" + res.fo + ".xlsx", "PICKING", [["FASE", "CODIGO", "DESCRIPCION", "HU (UMP DESTINO)", "CANTIDAD", "ESTADO", "CONFIRMADO POR", "NOMBRE", "FECHA CONFIRMACION", "HORA CONFIRMACION", "HU EN CONTEO DEL VALIDADOR"]].concat(filas.map(r => [r.fase, r.codigo, r.desc, r.hu, r.conf ? r.real : r.prev, r.conf ? "Confirmada" : "Abierta", r.usuario, r.nombre, r.fecha, r.hora, r.enConteo])), [12, 12, 44, 24, 10, 12, 16, 30, 14, 14, 14]);
+      q("#vp-xls").onclick = () => xlsConEncabezado("PICKING_FO_" + res.fo + ".xlsx", "PICKING", "PICKING · FO " + res.fo, dat, F.fase || null, ["FASE", "CODIGO", "DESCRIPCION", "HU (UMP DESTINO)", "CANTIDAD", "ESTADO", "CONFIRMADO POR", "NOMBRE", "FECHA CONFIRMACION", "HORA CONFIRMACION", "HU EN CONTEO DEL VALIDADOR"], filas.map(r => [r.fase, r.codigo, r.desc, r.hu, r.conf ? r.real : r.prev, r.conf ? "Confirmada" : "Abierta", r.usuario, r.nombre, r.fecha, r.hora, r.enConteo]), [12, 12, 44, 24, 10, 12, 16, 30, 14, 14, 14]);
     };
     pintar();
   }
