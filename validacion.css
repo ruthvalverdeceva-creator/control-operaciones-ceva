@@ -92,3 +92,27 @@
 .vs .kpi.r b { color: #e30a17; } .vs .kpi.o b { color: #d98a00; } .vs .kpi.g b { color: #00a862; }
 .vs .avisos { background: #fff3dc; border: 1px solid #f0d28a; color: #7a5200; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 8px 0; }
 .vs select { padding: 10px; border-radius: 8px; border: 1.5px solid #c3cbd9; font-size: 14px; min-width: 240px; }
+
+/* ===== Acciones del staff en cada fase ===== */
+.vx details.acc { margin-top: 8px; font-size: 13px; }
+.vx details.acc summary { display: inline-block; list-style: none; cursor: pointer; border: 1px solid #c3cbd9; border-radius: 16px; background: #f3f5fa; color: #0f2150; padding: 5px 12px; font-weight: 700; }
+.vx details.acc summary::-webkit-details-marker { display: none; }
+.vx details.acc[open] summary { background: #0f2150; color: #fff; border-color: #0f2150; }
+.vx .acc-menu { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-width: 280px; }
+.vx .acc-menu button { text-align: left; border: 1px solid #c3cbd9; background: #fff; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; color: #0f2150; }
+.vx .acc-menu button.pelig { border-color: #e3a5a9; background: #fdeaea; color: #a30f1b; }
+
+/* ===== Pantalla REGISTROS del validador ===== */
+.vx .chip { border-radius: 16px; padding: 5px 12px; font-size: 13px; font-weight: 700; }
+.vx .chip.ok { background: #e3f6ec; color: #0a6b3f; } .vx .chip.mal { background: #fde8ea; color: #a30f1b; }
+.vx .fixbar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #ddd; text-align: center; padding: 14px; z-index: 20; }
+.vx .fixbar a { color: var(--navy); font-weight: 800; cursor: pointer; font-size: 16px; }
+.vx .palc { border: 1.5px solid #999; border-radius: 16px; padding: 12px; margin: 12px 0; background: #fff; }
+.vx .palc .ph { display: flex; justify-content: space-between; font-size: 16px; margin-bottom: 8px; }
+.vx .palc .hurow2 { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-bottom: 6px; }
+.vx .palc .hurow2 label { margin: 0; } .vx .palc .hurow2 input { font-weight: 800; }
+.vx .palc .it { display: grid; grid-template-columns: 1fr 80px auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #e5e8ef; }
+.vx .palc .it small { display: block; color: #777; font-size: 12px; }
+.vx .palc .it input { text-align: center; font-weight: 800; font-size: 18px; margin: 0; }
+.vx .palc .addrow { display: grid; grid-template-columns: 1fr 70px auto; gap: 6px; align-items: center; margin: 8px 0; }
+.vx .palc .addrow input { margin: 0; } .vx .palc .addrow .btn { margin: 0; padding: 12px 10px; font-size: 12px; text-transform: none; }
