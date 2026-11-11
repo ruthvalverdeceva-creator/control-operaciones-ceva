@@ -401,6 +401,7 @@ const VAL = (function () {
     const pintar = () => {
       c.innerHTML = banner + '<div class="vx" style="max-width:640px">' + barraFiltros(ST.fases, ST.S) + listaHTML(ST.fases, ST.S, { staff: true, yo: ST.yo, admin: ST.esAdmin }) + "</div>";
       enlazarFiltros(c, ST.S, pintar);
+      c.querySelectorAll(".card[data-fase]").forEach(card => card.onclick = ev => { if (ev.target.closest("details,button,a,input")) return; staffFaseDetalle(c, card.dataset.fase); });
       c.querySelectorAll("[data-cruce]").forEach(b => b.onclick = ev => { ev.stopPropagation(); ST.tab = "cruce"; ST.fo = b.dataset.cruce; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
       c.querySelectorAll("[data-sinstock]").forEach(b => b.onclick = ev => { ev.stopPropagation(); alert("Este viaje todavía no tiene STOCK ENTREGA cargado, así que no se puede cruzar. " + (ST.esAdmin ? "Ve a «Cargar datos» y sube el STOCK ENTREGA." : "Pídele a la administradora que lo suba.")); if (!ST.esAdmin) return; ST.tab = "cargar"; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
       const accion = (sel, texto, rpc, ok) => c.querySelectorAll(sel).forEach(b => b.onclick = async ev => {
@@ -573,7 +574,7 @@ const VAL = (function () {
   }
   async function staffCalcular() {
     const fo = q("#cr-fo").value, out = q("#cr-out"); if (!fo) return;
-    ST.fo = fo; out.innerHTML = '<p class="rel">Calculando…</p>';
+    ST.fo = fo; ST.soloFase = null; ST.refrescar = null; if (ST.fp) ST.fp.fase = ""; out.innerHTML = '<p class="rel">Calculando…</p>';
     try {
       const dat = await datosFO(fo);
       if (!dat.stock.length) { out.innerHTML = '<div class="avisos">⚠ Este viaje no tiene STOCK ENTREGA cargado, así que no se puede cruzar. ' + (ST.esAdmin ? "Súbelo en «Cargar datos»." : "Pídele a la administradora que lo suba.") + "</div>"; return; }
@@ -592,6 +593,38 @@ const VAL = (function () {
     } catch (e) { out.innerHTML = '<div class="avisos">No se pudo calcular: ' + E(e.message || e) + "</div>"; }
   }
 
+
+  /* ---- Detalle de una fase para la administradora / asistente (como la pantalla del auxiliar) ---- */
+  async function staffFaseDetalle(c, fase) {
+    const f = (ST.fases || []).find(x => x.fase === fase) || { fase };
+    c.innerHTML = '<div class="vx" style="max-width:900px"><div class="top"><span class="tag">' + E(f.canal_sistema || "") + " | " + E(f.canal_fisico || "") + '</span><button class="btn w sm" id="fd-volver">← Volver a fases</button></div>' +
+      '<div class="fofase">FO: ' + E(f.fo || "-") + " · FASE: " + E(fase) + " · " + E(f.estado || "") + (f.validador ? " · Validador: " + E(f.validador) : "") + "</div>" +
+      '<div class="tabs" style="max-width:640px"><button data-fd="reg">📋 Registros</button><button data-fd="stock">📦 Stock entregas</button><button data-fd="pick">🧾 Picking</button></div>' +
+      (f.estado === "CERRADO" ? '<p class="rel"><button class="reab" data-reabrir="' + E(fase) + '">↩ Reabrir fase</button></p>' : "") + '<div id="cr-vista" style="margin-top:8px"></div></div>';
+    q("#fd-volver").onclick = () => { ST.soloFase = null; ST.refrescar = null; staffFases(c); };
+    const rb = c.querySelector("[data-reabrir]"); if (rb) rb.onclick = async () => { if (!confirm("¿Reabrir la fase " + fase + "?\n\nVolverá a EN PROCESO y el validador podrá seguir contando.")) return; const { error } = await sb().rpc("val_reabrir_fase", { p_fase: fase }); if (error) return alert(error.message); toast("Fase reabierta"); staffFases(c); };
+    let cache = null; ST.refrescar = () => { cache = null; abrir("stock"); };
+    const cargar = async () => { if (cache) return cache; if (!f.fo) throw new Error("Esta fase todavía no tiene viaje (FO) asignado, por eso no hay cruce. Carga el MONITOR o espera la sincronización del Drive."); const dat = await datosFO(f.fo); if (!dat.stock.length) throw new Error("Este viaje no tiene STOCK ENTREGA cargado."); cache = { dat, res: window.CRUCE.cruceFO(dat) }; return cache; };
+    const abrir = async t => {
+      c.querySelectorAll("[data-fd]").forEach(b => b.classList.toggle("on", b.dataset.fd === t));
+      const cu = q("#cr-vista"); cu.innerHTML = '<p class="rel">Cargando…</p>';
+      try {
+        if (t === "reg") {
+          const regs = await leerTodo((a, b) => sb().from("val_registros").select("paleta,hu,codigo,descripcion,cantidad,creado").eq("fase", fase).order("paleta").order("id").range(a, b));
+          const P = {}; regs.forEach(r => { (P[r.paleta] = P[r.paleta] || { paleta: r.paleta, hu: r.hu, items: [], t: r.creado }).items.push(r); });
+          const pal = Object.values(P).sort((a, b) => a.paleta - b.paleta), tot = regs.reduce((t0, r) => t0 + r.cantidad, 0);
+          let est = []; try { const r2 = await sb().rpc("val_vista_stock", { p_fase: fase, p_vista: "FASE" }); est = r2.data || []; } catch (e) {}
+          cu.innerHTML = '<div class="kpis"><div class="kpi"><b>' + pal.length + '</b><span>paletas registradas</span></div><div class="kpi"><b>' + tot + '</b><span>bultos contados</span></div><div class="kpi"><b>' + new Set(regs.map(r => r.codigo)).size + '</b><span>códigos distintos</span></div></div>' +
+            (pal.length ? '<div class="cajas">' + pal.map(p => '<div class="caja"><h4>PALETA ' + p.paleta + " · " + p.items.reduce((t0, x) => t0 + x.cantidad, 0) + ' bultos</h4><p><b>HU:</b> ' + E(p.hu) + (p.t ? " · " + E(fmtTs(p.t)) : "") + "</p>" + p.items.map(x => "<div style='display:flex;justify-content:space-between;gap:8px;border-top:1px solid #e5e8ef;padding:4px 0'><span><b>" + E(x.codigo) + "</b><br><span class='rel' style='font-size:11px'>" + E(x.descripcion || "") + "</span></span><b>" + x.cantidad + "</b></div>").join("") + "</div>").join("") + "</div>" : '<div class="avisos">El validador todavía no ha registrado paletas en esta fase.</div>') +
+            (est.length ? "<h4 style='margin:16px 0 4px'>Estado por código (solicitado vs. conteo de esta fase)</h4>" + tablaStockHTML(est, true) : "");
+        } else if (t === "stock") { const { dat, res } = await cargar(); ST.vista = "stock"; ST.soloFase = new Set(dat.stock.filter(x => !x.fase || window.CRUCE.clean(x.fase) === window.CRUCE.clean(fase)).map(x => window.CRUCE.clean(x.material))); staffVistaStock(res, dat); }
+        else { const { dat, res } = await cargar(); ST.vista = "pick"; ST.fp = ST.fp || {}; ST.fp.fase = window.CRUCE.clean(fase); staffVistaPicking(res, dat); }
+      } catch (e) { cu.innerHTML = '<div class="avisos">' + E(e.message || e) + "</div>"; }
+    };
+    c.querySelectorAll("[data-fd]").forEach(b => b.onclick = () => abrir(b.dataset.fd));
+    abrir("reg");
+  }
+
   /* ---- Vistas del cruce en pantalla: formato STOCK ENTREGAS (con comentarios) y detalle de PICKING ---- */
   const fechaDT = (f, h) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(f || "").trim()); if (!m) return null; const t = /^(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(h || "").trim()); return new Date(+m[3], +m[2] - 1, +m[1], t ? +t[1] : 0, t ? +t[2] : 0, t ? +(t[3] || 0) : 0); };
   function staffVista(res, dat) { if (ST.vista === "pick") staffVistaPicking(res, dat); else staffVistaStock(res, dat); }
@@ -604,8 +637,8 @@ const VAL = (function () {
     const COM = {}; dat.com.forEach(c => { (COM[window.CRUCE.clean(c.codigo)] = COM[window.CRUCE.clean(c.codigo)] || []).push(c); });
     let solo = ST.soloDif === true;
     const pintar = () => {
-      const filas = res.filas.filter(f => !solo || f.status !== "CUADRADO");
-      cu.innerHTML = '<p class="rel">Es el formato de <b>STOCK ENTREGAS</b>: lo solicitado vs. lo que validaron los auxiliares. Escribe un comentario en la fila (por ejemplo un ajuste por capacidad o peso del transporte): <b>se guarda en línea</b> y el auxiliar lo verá en su reporte cuando cierre la validación.</p>' +
+      const filas = res.filas.filter(f => (!solo || f.status !== "CUADRADO") && (!ST.soloFase || !ST.soloFase.size || ST.soloFase.has(window.CRUCE.clean(f.codigo))));
+      cu.innerHTML = (ST.soloFase && ST.soloFase.size ? '<div class="rel">Mostrando los códigos de esta fase; el conteo es el acumulado del viaje (' + E(res.fo) + ').</div>' : "") + '<p class="rel">Es el formato de <b>STOCK ENTREGAS</b>: lo solicitado vs. lo que validaron los auxiliares. Escribe un comentario en la fila (por ejemplo un ajuste por capacidad o peso del transporte): <b>se guarda en línea</b> y el auxiliar lo verá en su reporte cuando cierre la validación.</p>' +
         '<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="vs-solo"' + (solo ? " checked" : "") + '> Mostrar solo diferencias</label> <button class="btn-v g" id="vs-xls">📥 Descargar esta vista</button>' +
         '<div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Código</th><th>Descripción</th><th>UN</th><th>Solicitado</th><th>Conteo</th><th>Dif.</th><th>Status</th><th>Comentario de la asistente</th></tr>' +
         filas.map((f, i) => { const c = window.CRUCE.clean(f.codigo), fa = faseDe[c] || fb, ex = (COM[c] || []).find(x => window.CRUCE.clean(x.fase) === fa) || (COM[c] || [])[0];
@@ -626,7 +659,7 @@ const VAL = (function () {
         if (!texto) er = (await sb().from("val_comentarios").delete().eq("fase", fa).eq("codigo", c)).error;
         else er = (await sb().from("val_comentarios").upsert({ fase: fa, codigo: c, fo: res.fo, descripcion: f.desc || null, comentario: texto, usuario: mia || null, actualizado: new Date().toISOString() }, { onConflict: "fase,codigo" })).error;
         if (er) { b.disabled = false; return alert(er.message); }
-        toast("Comentario guardado ✔"); staffCalcular();
+        toast("Comentario guardado ✔"); if (ST.refrescar) ST.refrescar(); else staffCalcular();
       });
     };
     pintar();
