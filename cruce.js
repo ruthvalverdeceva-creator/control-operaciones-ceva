@@ -289,11 +289,11 @@
       return { viaje: fo, codigo: a.codigo, desc: a.desc, un: un(a.codigo), esp: a.esp, reg: a.reg, dif: a.reg - a.esp, status: a.status, obs: ob.join(" · ") };
     }).sort((x, y) => { const o = { FALTANTE: 0, SOBRANTE: 1, "NO PERTENECE": 2, PENDIENTE: 3, AJUSTE: 4, CUADRADO: 5 }; return (o[x.status] - o[y.status]) || String(x.codigo).localeCompare(String(y.codigo)); });
     const cuenta = s => filas.filter(f => f.status === s).length;
-    return { fo, filas, hu, eri, avisos, fases, cruceHU: cr,
+    return { fo, filas, hu, eri, avisos, fases, cruceHU: cr, E,
       resumen: { codigos: filas.length, cuadrados: cuenta("CUADRADO"), faltantes: cuenta("FALTANTE"), sobrantes: cuenta("SOBRANTE"), noPertenece: cuenta("NO PERTENECE"), pendientes: cuenta("PENDIENTE"), ajustes: cuenta("AJUSTE"),
         erroresPicking: eri.length, problemasHU: hu.length } };
   }
 
-  const api = { esperado, acumulado, cruceHU, auditHU, auditERI, cruceFO, resp, huN, huKey, clean };
+  const api = { facSap, esperado, acumulado, cruceHU, auditHU, auditERI, cruceFO, resp, huN, huKey, clean };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CRUCE = api;
 })(typeof window !== "undefined" ? window : globalThis);
