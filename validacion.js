@@ -745,8 +745,70 @@ const VAL = (function () {
     pintar();
   }
 
+  /* Picking: tres vistas — cruce consolidado (stock · picking · registrado), HU y paletas del validador, y detalle de tareas */
   function staffVistaPicking(res, dat) {
-    const cu = q("#cr-vista"), F = ST.fp = ST.fp || {};
+    const cu = q("#cr-vista"), F = ST.fp = ST.fp || {}; F.modo = F.modo || "cons";
+    cu.innerHTML = '<div class="tabs" style="max-width:760px"><button data-vm="cons">Cruce consolidado</button><button data-vm="hu">HU y paletas</button><button data-vm="tar">Tareas de picking</button></div><div id="vp-cuerpo"></div>';
+    cu.querySelectorAll("[data-vm]").forEach(b => { b.classList.toggle("on", b.dataset.vm === F.modo); b.onclick = () => { F.modo = b.dataset.vm; staffVistaPicking(res, dat); }; });
+    if (F.modo === "cons") return pickConsolidado(res, dat, q("#vp-cuerpo"), F);
+    if (F.modo === "hu") return pickHU(res, dat, q("#vp-cuerpo"), F);
+    return staffVistaPickingTareas(res, dat);
+  }
+  function selFase(dat, F) { return '<select id="vp-fase"><option value="">Todas las fases</option>' + dat.fases.map(f => '<option' + (F.fase === window.CRUCE.clean(f.fase) ? " selected" : "") + ">" + E(f.fase) + "</option>").join("") + "</select>"; }
+  /* Una sola tabla: lo programado (stock entregas), lo preparado (picking) y lo que registró el validador, contrastado con el picking */
+  function pickConsolidado(res, dat, cu, F) {
+    const C = window.CRUCE, fases = F.fase ? [F.fase] : (res.fases || []).filter(x => dat.fases.some(f => C.clean(f.fase) === C.clean(x)));
+    const stk = {};   // stock programado por fase|código
+    const fSolo = fases.length === 1 ? fases[0] : (dat.fases.length === 1 ? C.clean(dat.fases[0].fase) : "");
+    const porFase = {}; dat.stock.forEach(r => { const fa = C.clean(r.fase) || fSolo || ("SF" + res.fo); (porFase[fa] = porFase[fa] || []).push(r); });
+    Object.keys(porFase).forEach(fa => { const f = C.facSap(porFase[fa].map(r => Number(r.cantidad) || 0)); porFase[fa].forEach(r => { const k = fa + "|" + C.clean(r.material); stk[k] = (stk[k] || 0) + Math.round((Number(r.cantidad) || 0) / f); }); });
+    let filas = [];
+    fases.forEach(fa => {
+      const A = C.acumulado(fa, res.E, dat.regs, dat.com), conPk = !!(res.E.PK && res.E.PK[fa]);
+      (A.vf || []).forEach(x => { const pk = conPk && res.E.F[fa] && res.E.F[fa][x.codigo] ? res.E.F[fa][x.codigo].esp : (conPk ? 0 : null), st0 = stk[fa + "|" + x.codigo];
+        filas.push({ fase: fa, codigo: x.codigo, desc: x.desc, stock: st0 == null ? (Object.keys(porFase).length ? 0 : null) : st0, pick: pk, ref: x.esp, reg: x.reg, dif: x.reg - x.esp, status: x.status, com: x.com, ab: x.ab, conPk }); });
+    });
+    const solo = F.soloDif === true, t = (F.q || "").toUpperCase().trim();
+    const vis = filas.filter(r => (!solo || r.status !== "CUADRADO") && (!t || (r.codigo + " " + r.desc).toUpperCase().includes(t)));
+    const hayStock = dat.stock.length > 0, hayPk = dat.pick.length > 0;
+    const ref = hayPk ? "PICKING (lo que realmente se preparó)" : "STOCK ENTREGAS (no hay picking cargado)";
+    cu.innerHTML = '<p class="rel">Referencia del cruce: <b>' + ref + "</b>. El stock entregas se muestra solo como lo programado; si el picking preparó menos (por espacio, balanza, etc.) se compara contra el picking.</p>" +
+      '<div class="filtros-vs">' + selFase(dat, F) + ' <input type="text" id="vp-q" placeholder="🔎 Código o descripción" value="' + E(F.q || "") + '" style="min-width:220px"> <label style="display:inline-flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="vp-dif"' + (solo ? " checked" : "") + '> Solo diferencias</label> <button class="btn-v g" id="vp-xls">📥 Descargar</button> <span class="rel">' + vis.length + " de " + filas.length + " códigos</span></div>" +
+      '<div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Fase</th><th>Código</th><th>Descripción</th><th>Stock entrega<br><small>(programado)</small></th><th>Picking<br><small>(preparado)</small></th><th>Registrado<br><small>(validador)</small></th><th>Dif. vs ' + (hayPk ? "picking" : "stock") + "</th><th>Status</th><th>Comentario</th></tr>" +
+      (vis.map(r => "<tr><td>" + E(r.fase) + "</td><td><b>" + E(r.codigo) + "</b></td><td>" + E(r.desc) + "</td><td>" + (r.stock == null ? "—" : r.stock) + "</td><td style='font-weight:800'>" + (r.pick == null ? "—" : r.pick + (r.ab ? " *" : "")) + "</td><td><b>" + r.reg + "</b></td><td style='font-weight:800;color:" + (r.dif < 0 ? "#e30a17" : r.dif > 0 ? "#d98a00" : "#00a862") + "'>" + (r.dif > 0 ? "+" : "") + r.dif + "</td><td style='font-weight:800;color:" + (ESTADO_COLOR[r.status] || "#333") + "'>" + E(r.status) + "</td><td class='d'>" + E(r.stock != null && r.pick != null && r.stock !== r.pick ? ("Programado " + r.stock + ", se preparó " + r.pick + (r.com ? " · " : "")) : "") + E(r.com || "") + "</td></tr>").join("") || '<tr><td colspan="9" style="color:#888">Sin códigos para mostrar.</td></tr>') + "</table></div>" +
+      (hayPk ? '<p class="rel">* = picking aún sin confirmar (cantidad prevista).</p>' : "") + (hayStock || hayPk ? "" : '<div class="avisos">No hay stock entregas ni picking cargado.</div>');
+    q("#vp-fase").onchange = e => { F.fase = e.target.value ? C.clean(e.target.value) : ""; pickConsolidado(res, dat, cu, F); };
+    q("#vp-q").onchange = e => { F.q = e.target.value; pickConsolidado(res, dat, cu, F); };
+    q("#vp-dif").onchange = e => { F.soloDif = e.target.checked; pickConsolidado(res, dat, cu, F); };
+    q("#vp-xls").onclick = () => xlsConEncabezado("CRUCE_CONSOLIDADO_FO_" + res.fo + ".xlsx", "CRUCE", "CRUCE CONSOLIDADO · FO " + res.fo, dat, F.fase || null, ["FASE", "CODIGO", "DESCRIPCION", "STOCK ENTREGA (PROGRAMADO)", "PICKING (PREPARADO)", "REGISTRADO (VALIDADOR)", "DIFERENCIA VS REFERENCIA", "STATUS", "COMENTARIO"], vis.map(r => [r.fase, r.codigo, r.desc, r.stock == null ? "" : r.stock, r.pick == null ? "" : r.pick, r.reg, r.dif, r.status, r.com || ""]), [12, 12, 44, 14, 14, 14, 14, 14, 50]);
+  }
+  /* Qué HU del picking corresponde a cada paleta del validador (aunque la haya registrado sin HU), quién picó y en cuántas paletas */
+  function pickHU(res, dat, cu, F) {
+    const C = window.CRUCE, cr = res.cruceHU;
+    if (!cr || cr.sinPicking) { cu.innerHTML = '<div class="avisos">Este viaje no tiene PICKING cargado, así que no se puede identificar el HU ni al picador. Súbelo en «Cargar datos».</div>'; return; }
+    const t = (F.q || "").toUpperCase().trim(), nombre = (u, h) => (C.resp(u, h, dat.U || {}).nombre) || u || "—";
+    const pal = (fase, n) => cr.paletas.find(p => p.fase === fase && p.pal === n);
+    const hus = cr.hus.filter(h => (!F.fase || h.fase === F.fase) && (!t || (h.hu + " " + h.users + " " + nombre(h.users, "")).toUpperCase().includes(t)));
+    const pals = cr.paletas.filter(p => (!F.fase || p.fase === F.fase) && (!t || (p.huReg + " " + p.huReal).toUpperCase().includes(t)));
+    const picadores = {}; hus.forEach(h => { const n = nombre(h.users, (h.dif.find(d => d.hora) || {}).hora); const o = picadores[n] = picadores[n] || { n, hus: 0, pal: 0, multi: 0 }; o.hus++; o.pal += h.n; if (h.n > 1) o.multi++; });
+    const col = { CUADRADO: "#00a862", "CON DIFERENCIAS": "#e30a17", "SIN REGISTRAR": "#d98a00" };
+    const r0 = cr.resumen;
+    cu.innerHTML = '<p class="rel">Cada fila es un <b>HU del picking</b>. Aunque el validador haya registrado paletas «SN» (sin HU), se identifica a qué HU pertenecen por su contenido. Si un HU aparece en varias paletas, no cortaron la tarima.</p>' +
+      '<div class="kpis"><div class="kpi"><b>' + r0.hus + '</b><span>HU en el picking</span></div><div class="kpi g"><b>' + r0.cuadrados + '</b><span>HU cuadrados</span></div><div class="kpi"><b>' + r0.multi + '</b><span>HU en varias paletas</span></div><div class="kpi"><b>' + r0.sn + '</b><span>paletas sin HU</span></div><div class="kpi"><b>' + r0.sinReg + '</b><span>HU sin registrar</span></div></div>' +
+      '<div class="filtros-vs">' + selFase(dat, F) + ' <input type="text" id="vp-q" placeholder="🔎 HU o picador" value="' + E(F.q || "") + '" style="min-width:220px"> <button class="btn-v g" id="vp-xls">📥 Descargar</button></div>' +
+      '<h4 style="margin:14px 0 4px">HU del picking → paletas que lo contienen</h4><div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Fase</th><th>HU (picking)</th><th>Picador</th><th>Confirmado</th><th>Paletas del validador</th><th>N.° paletas</th><th>Estado</th><th>Detalle</th></tr>' +
+      (hus.map(h => { const fc = h.dif.find(d => d.fecha) || {}, ps = h.paletas.map(n => { const p = pal(h.fase, n); return "P" + n + (p && p.tipo === "SN" ? " <small>(sin HU)</small>" : ""); }).join(", ") || "—";
+        return "<tr><td>" + E(h.fase) + "</td><td><b>" + E(h.hu) + "</b></td><td>" + E(nombre(h.users, fc.hora)) + "</td><td>" + E((fc.fecha || "") + " " + (fc.hora || "")) + "</td><td>" + ps + "</td><td style='font-weight:800;color:" + (h.n > 1 ? "#e30a17" : "#111") + "'>" + h.n + (h.n > 1 ? " ⚠" : "") + "</td><td style='font-weight:800;color:" + (col[h.status] || "#333") + "'>" + E(h.status) + (h.caso ? "<div class='d'>" + E(h.caso) + "</div>" : "") + "</td><td><details><summary>ver</summary>" + h.dif.map(d => "<div class='d'><b>" + E(d.codigo) + "</b> " + E(d.desc) + ": picking " + d.esp + " · registrado " + d.reg + (d.dif ? " (" + (d.dif > 0 ? "+" : "") + d.dif + ")" : "") + "</div>").join("") + (h.obs ? "<div class='d' style='color:#a30f1b'>" + E(h.obs) + "</div>" : "") + "</details></td></tr>"; }).join("") || '<tr><td colspan="8" style="color:#888">Sin HU para mostrar.</td></tr>') + "</table></div>" +
+      '<h4 style="margin:18px 0 4px">Paletas del validador → HU real identificado</h4><div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Fase</th><th>Paleta</th><th>HU escaneado</th><th>HU real</th><th>Contenido</th><th>Caso</th></tr>' +
+      (pals.map(p => "<tr><td>" + E(p.fase) + "</td><td><b>P" + p.pal + "</b></td><td>" + E(p.huReg) + "</td><td><b>" + E(p.huReal || "—") + "</b>" + (p.nPal > 1 ? "<div class='d'>paleta " + p.idx + " de " + p.nPal + " del HU</div>" : "") + "</td><td class='d'>" + p.items.map(i => E(i.codigo) + " × " + i.cant).join("<br>") + "</td><td style='font-weight:700;color:" + (p.caso ? "#a30f1b" : "#00a862") + "'>" + E(p.caso || "OK") + "</td></tr>").join("") || '<tr><td colspan="6" style="color:#888">Sin paletas.</td></tr>') + "</table></div>" +
+      '<h4 style="margin:18px 0 4px">Por picador</h4><div style="overflow-x:auto"><table class="tbl-vs"><tr><th>Picador</th><th>HU picados</th><th>Paletas armadas</th><th>HU en varias paletas</th></tr>' +
+      (Object.values(picadores).sort((a, b) => b.hus - a.hus).map(o => "<tr><td><b>" + E(o.n) + "</b></td><td>" + o.hus + "</td><td>" + o.pal + "</td><td style='font-weight:700;color:" + (o.multi ? "#e30a17" : "#111") + "'>" + o.multi + "</td></tr>").join("") || '<tr><td colspan="4" style="color:#888">—</td></tr>') + "</table></div>";
+    q("#vp-fase").onchange = e => { F.fase = e.target.value ? C.clean(e.target.value) : ""; pickHU(res, dat, cu, F); };
+    q("#vp-q").onchange = e => { F.q = e.target.value; pickHU(res, dat, cu, F); };
+    q("#vp-xls").onclick = () => xlsConEncabezado("HU_Y_PALETAS_FO_" + res.fo + ".xlsx", "HU", "HU Y PALETAS · FO " + res.fo, dat, F.fase || null, ["FASE", "HU (PICKING)", "PICADOR", "FECHA CONF.", "HORA CONF.", "PALETAS DEL VALIDADOR", "N.° PALETAS", "ESTADO", "CASO"], hus.map(h => { const fc = h.dif.find(d => d.fecha) || {}; return [h.fase, h.hu, nombre(h.users, fc.hora), fc.fecha || "", fc.hora || "", h.paletas.map(n => "P" + n + ((pal(h.fase, n) || {}).tipo === "SN" ? " (sin HU)" : "")).join(", "), h.n, h.status, h.caso || ""]; }), [12, 26, 30, 12, 10, 28, 10, 18, 22]);
+  }
+  function staffVistaPickingTareas(res, dat) {
+    const cu = q("#vp-cuerpo"), F = ST.fp = ST.fp || {};
     const fasesViaje = dat.fases.map(f => f.fase), FI = {}; dat.fases.forEach(f => FI[window.CRUCE.clean(f.fase)] = f);
     const huReg = {}; dat.regs.forEach(r => { huReg[window.CRUCE.clean(r.fase) + "|" + window.CRUCE.huKey(r.hu)] = 1; });
     const todo = dat.pick.filter(r => String(r.status || "").toUpperCase() !== "A").map(r => {
