@@ -76,7 +76,7 @@ const VAL = (function () {
     Object.keys(porFo).forEach(fo => {
       const delFo = todas.filter(f => (f.fo || "SIN VIAJE") === fo), k = delFo.filter(f => f.pk === "CONFIRMADA").length, color = COLORES[orden.indexOf(fo) % COLORES.length];
       h += '<div class="fog" style="border-left-color:' + color + '"><div class="foh" style="background:' + color + '"><b>FO: ' + E(fo) + "</b>" +
-        (opt.staff ? (delFo.some(f => f.lineas_stock > 0) ? '<button class="mn" data-cruce="' + E(fo) + '">📥 Cruce</button>' : '<button class="mn" data-sinstock="1" style="background:#fff3dc;color:#7a5200">⚠ Sube el STOCK ENTREGA</button>') : "") +
+        (opt.staff ? (delFo.some(f => f.lineas_stock > 0 || f.lineas_picking > 0) ? '<button class="mn" data-cruce="' + E(fo) + '">📥 Cruce</button>' : '<button class="mn" data-sinstock="1" style="background:#fff3dc;color:#7a5200">⚠ Sube el STOCK ENTREGA</button>') : "") +
         "<span>" + delFo.length + " fase" + (delFo.length === 1 ? "" : "s") + " · " + k + "/" + delFo.length + " con picking confirmado</span></div>";
       porFo[fo].forEach(f => {
         const mia = f.validador_ref && opt.yo && f.validador_ref === "u:" + opt.yo;
@@ -87,7 +87,7 @@ const VAL = (function () {
           (f.inicio ? '<div class="sm">Inicio: ' + E(fmtTs(f.inicio)) + "</div>" : "") +
           (f.fin ? '<div class="sm">Fin: ' + E(fmtTs(f.fin)) + "</div>" : "") +
           (f.paletas ? '<div class="sm" style="font-weight:700;color:#111">📦 ' + f.paletas + " paletas · " + f.bultos + " bultos registrados</div>" : "") +
-          (opt.staff ? (f.lineas_stock > 0 ? '<div class="pk ok">📦 STOCK ENTREGA CARGADO · ' + f.lineas_stock + " líneas</div>" : '<div class="pk ab">📦 SIN STOCK ENTREGA · falta subirlo en «Cargar datos»</div>') : "") +
+          (opt.staff ? (f.lineas_stock > 0 ? '<div class="pk ok">📦 STOCK ENTREGA CARGADO · ' + f.lineas_stock + " líneas</div>" : f.lineas_picking > 0 ? '<div class="pk ab">📦 Sin stock entrega · se validará con el PICKING (' + f.lineas_picking + " líneas)</div>" : '<div class="pk ab">📦 SIN STOCK ENTREGA NI PICKING · falta subirlo en «Cargar datos»</div>') : "") +
           pkHTML(f) +
           (opt.staff ? accionesHTML(f, opt.admin) : "") +
           "</div>";
@@ -415,7 +415,7 @@ const VAL = (function () {
       enlazarFiltros(c, ST.S, pintar);
       c.querySelectorAll(".card[data-fase]").forEach(card => card.onclick = ev => { if (ev.target.closest("details,button,a,input")) return; staffFaseDetalle(c, card.dataset.fase); });
       c.querySelectorAll("[data-cruce]").forEach(b => b.onclick = ev => { ev.stopPropagation(); ST.tab = "cruce"; ST.fo = b.dataset.cruce; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
-      c.querySelectorAll("[data-sinstock]").forEach(b => b.onclick = ev => { ev.stopPropagation(); alert("Este viaje todavía no tiene STOCK ENTREGA cargado, así que no se puede cruzar. " + (ST.esAdmin ? "Ve a «Cargar datos» y sube el STOCK ENTREGA." : "Pídele a la administradora que lo suba.")); if (!ST.esAdmin) return; ST.tab = "cargar"; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
+      c.querySelectorAll("[data-sinstock]").forEach(b => b.onclick = ev => { ev.stopPropagation(); alert("Este viaje todavía no tiene STOCK ENTREGA ni PICKING cargado, así que no se puede cruzar. " + (ST.esAdmin ? "Ve a «Cargar datos» y sube el STOCK ENTREGA." : "Pídele a la administradora que lo suba.")); if (!ST.esAdmin) return; ST.tab = "cargar"; staffRender(q("#principal"), ST.yo, ST.esAdmin); });
       const accion = (sel, texto, rpc, ok) => c.querySelectorAll(sel).forEach(b => b.onclick = async ev => {
         ev.stopPropagation();
         const fa = b.dataset[sel.replace(/^\[data-|\]$/g, "")];
@@ -595,7 +595,7 @@ const VAL = (function () {
     ST.fo = fo; ST.soloFase = null; ST.soloFaseId = null; ST.refrescar = null; if (ST.fp) ST.fp.fase = ""; out.innerHTML = '<p class="rel">Calculando…</p>';
     try {
       const dat = await datosFO(fo);
-      if (!dat.stock.length) { out.innerHTML = '<div class="avisos">⚠ Este viaje no tiene STOCK ENTREGA cargado, así que no se puede cruzar. ' + (ST.esAdmin ? "Súbelo en «Cargar datos»." : "Pídele a la administradora que lo suba.") + "</div>"; return; }
+      if (!dat.stock.length && !dat.pick.length) { out.innerHTML = '<div class="avisos">⚠ Este viaje no tiene STOCK ENTREGA ni PICKING cargado, así que no se puede cruzar. ' + (ST.esAdmin ? "Súbelo en «Cargar datos»." : "Pídele a la administradora que lo suba.") + "</div>"; return; }
       const res = window.CRUCE.cruceFO(dat); ST.ultimo = res; const r = res.resumen;
       out.innerHTML = '<div class="kpis"><div class="kpi"><b>' + r.codigos + '</b><span>códigos del viaje</span></div><div class="kpi g"><b>' + r.cuadrados + '</b><span>cuadrados</span></div>' +
         '<div class="kpi r"><b>' + r.faltantes + '</b><span>faltantes</span></div><div class="kpi o"><b>' + r.sobrantes + '</b><span>sobrantes</span></div>' +
@@ -622,7 +622,7 @@ const VAL = (function () {
     q("#fd-volver").onclick = () => { ST.soloFase = null; ST.soloFaseId = null; ST.refrescar = null; staffFases(c); };
     const rb = c.querySelector("[data-reabrir]"); if (rb) rb.onclick = async () => { if (!confirm("¿Reabrir la fase " + fase + "?\n\nVolverá a EN PROCESO y el validador podrá seguir contando.")) return; const { error } = await sb().rpc("val_reabrir_fase", { p_fase: fase }); if (error) return alert(error.message); toast("Fase reabierta"); staffFases(c); };
     let cache = null; ST.refrescar = () => { cache = null; abrir("stock"); };
-    const cargar = async () => { if (cache) return cache; if (!f.fo) throw new Error("Esta fase todavía no tiene viaje (FO) asignado, por eso no hay cruce. Carga el MONITOR o espera la sincronización del Drive."); const dat = await datosFO(f.fo); if (!dat.stock.length) throw new Error("Este viaje no tiene STOCK ENTREGA cargado."); cache = { dat, res: window.CRUCE.cruceFO(dat) }; return cache; };
+    const cargar = async () => { if (cache) return cache; if (!f.fo) throw new Error("Esta fase todavía no tiene viaje (FO) asignado, por eso no hay cruce. Carga el MONITOR o espera la sincronización del Drive."); const dat = await datosFO(f.fo); if (!dat.stock.length && !dat.pick.length) throw new Error("Este viaje no tiene STOCK ENTREGA ni PICKING cargado."); cache = { dat, res: window.CRUCE.cruceFO(dat) }; return cache; };
     const abrir = async t => {
       c.querySelectorAll("[data-fd]").forEach(b => b.classList.toggle("on", b.dataset.fd === t));
       const cu = q("#cr-vista"); cu.innerHTML = '<p class="rel">Cargando…</p>';
